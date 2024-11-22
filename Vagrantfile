@@ -20,7 +20,6 @@ Vagrant.configure("2") do |config|
     k8scpm01.vm.provision "shell", inline: <<-SHELL
       NODE_IP=$(ip -o -4 addr show | grep "#{K8S_IP_NW}" | awk '{print $4}' | awk -F/ '{print $1}')
       sudo sed -i -E "s|^KUBELET_EXTRA_ARGS=.*|KUBELET_EXTRA_ARGS=--node-ip=${NODE_IP}|" /etc/default/kubelet
-####      echo "#{K8S_IP_NW}#{M_IP_START} #{k8master_hostname}" | sudo tee -a /etc/hosts > /dev/null
 	  echo "Run the command below to create the kubernets cluster."
 	  printf "%.0s#" {1..110}
 	  echo -e "\nsudo kubeadm init --apiserver-advertise-address ${NODE_IP} --control-plane-endpoint ${NODE_IP}"
@@ -49,7 +48,6 @@ Vagrant.configure("2") do |config|
       worker.vm.provision "shell", inline: <<-SHELL
         NODE_IP=$(ip -o -4 addr show | grep "#{K8S_IP_NW}" | awk '{print $4}' | awk -F/ '{print $1}')
         sudo sed -i -E "s|^KUBELET_EXTRA_ARGS=.*|KUBELET_EXTRA_ARGS=--node-ip=${NODE_IP}|" /etc/default/kubelet
-#####		echo "${NODE_IP} #{worker_hostname}" | sudo tee -a /etc/hosts > /dev/null
       SHELL
     end
   end
