@@ -63,9 +63,12 @@ Vagrant.configure("2") do |config|
        echo "${WORKER_IP} ${WORKER_HOSTNAME} k8sworker${ii}" | sudo tee -a /etc/hosts > /dev/null
      done
 #    # Install utilities and run the Kubernetes management script
+	sudo rm -f /etc/machine-id /var/lib/dbus/machine-id
+	sudo dbus-uuidgen --ensure=/var/lib/dbus/machine-id
+	sudo ln -s /var/lib/dbus/machine-id /etc/machine-id
     sudo apt-get update
     sudo apt-get install -y dos2unix net-tools
     sudo dos2unix /tmp/kubernets_manage.sh
-    bash -x /tmp/kubernets_manage.sh
+	bash -x /tmp/kubernets_manage.sh
   SHELL
 end
