@@ -24,7 +24,7 @@ Vagrant.configure("2") do |config|
 	  printf "%.0s#" {1..110}
 	  echo -e "\nsudo kubeadm init --apiserver-advertise-address ${NODE_IP} --control-plane-endpoint ${NODE_IP}"
 	  printf "%.0s#" {1..110}
-	  echo ""
+	  echo "" 
     SHELL
   end
 
@@ -66,6 +66,8 @@ Vagrant.configure("2") do |config|
 	sudo rm -f /etc/machine-id /var/lib/dbus/machine-id
 	sudo dbus-uuidgen --ensure=/var/lib/dbus/machine-id
 	sudo ln -s /var/lib/dbus/machine-id /etc/machine-id
+	sudo sed -i '/jammy/d' /etc/hosts  &>/dev/null
+	sudo sed -i '/ubuntu/d' /etc/hosts  &>/dev/null
     sudo apt-get update
     sudo apt-get install -y dos2unix net-tools
     sudo dos2unix /tmp/kubernets_manage.sh
