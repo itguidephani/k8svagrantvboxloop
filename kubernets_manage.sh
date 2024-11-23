@@ -5,10 +5,7 @@ export INSTALLURL_DEB="https://pkgs.k8s.io/core:/stable:/${KUBECTLVER}/deb"
 export APTKY_DEB_K8='/etc/apt/keyrings/kubernetes-apt-keyring.gpg'
 export DEBREPO="/etc/apt/sources.list.d/kubernetes.list"
 
-export HELM_INSTALLURL_DEB='https://baltocdn.com/helm/stable/debian/ all main'
-export HELM_APTKY_DEB='/usr/share/keyrings/helm.gpg'
-export DEB_HELM_REPO="https://baltocdn.com/helm"
-export HELM_REPO="/etc/apt/sources.list.d/helm-stable-debian.list"
+# export HELM_INSTALLURL='https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3'
 
 sudo swapoff -a
 sudo sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
@@ -18,9 +15,6 @@ echo "Instructions from https://kubernetes.io/docs/setup/production-environment/
 
 curl -fsSL $INSTALLURL_DEB/Release.key | sudo gpg --dearmor -o $APTKY_DEB_K8
 echo "deb [signed-by=${APTKY_DEB_K8}] ${INSTALLURL_DEB}/ /" | sudo tee $DEBREPO
-
-curl $DEB_HELM_REPO/signing.asc | gpg --dearmor | sudo tee $HELM_APTKY_DEB > /dev/null
-echo "deb [arch=$(dpkg --print-architecture) signed-by=${HELM_APTKY_DEB}] ${HELM_INSTALLURL_DEB}" | sudo tee $HELM_REPO
 
 echo "Creating containerd configuration file with list of necessary modules that need to be loaded with containerd"
 cat <<EOF | sudo tee /etc/modules-load.d/k8s.conf
@@ -71,4 +65,5 @@ sudo systemctl enable containerd kubelet
 sudo apt-mark hold kubelet kubeadm kubectl
 #
 echo "Installing helm packager"
-sudo apt-get install helm
+# sudo curl $HELM_INSTALLURL | bash
+sudo snap install helm --classic
