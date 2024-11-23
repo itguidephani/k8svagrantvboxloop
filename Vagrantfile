@@ -12,7 +12,7 @@ Vagrant.configure("2") do |config|
     k8scpm01.vm.network "private_network", ip: "#{K8S_IP_NW}#{M_IP_START}"
 
     k8scpm01.vm.provider "virtualbox" do |v|
-      v.memory = 2048  # 4GB for the master node
+      v.memory = 3072
       v.cpus = 4
     end
 
@@ -40,7 +40,7 @@ Vagrant.configure("2") do |config|
 
       # VirtualBox Configuration for Worker Node
       worker.vm.provider "virtualbox" do |v|
-        v.memory = 2048
+        v.memory = 3072
         v.cpus = 4
       end
 
@@ -68,7 +68,7 @@ Vagrant.configure("2") do |config|
 	sudo ln -s /var/lib/dbus/machine-id /etc/machine-id
 	sudo sed -i '/jammy/d' /etc/hosts  &>/dev/null
 	sudo sed -i '/ubuntu/d' /etc/hosts  &>/dev/null
-    sudo apt-get update
+	sudo apt-get update
     sudo apt-get install -y dos2unix net-tools
     sudo dos2unix /tmp/kubernets_manage.sh
 	bash -x /tmp/kubernets_manage.sh
