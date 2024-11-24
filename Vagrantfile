@@ -22,7 +22,7 @@ Vagrant.configure("2") do |config|
       sudo sed -i -E "s|^KUBELET_EXTRA_ARGS=.*|KUBELET_EXTRA_ARGS=--node-ip=${NODE_IP}|" /etc/default/kubelet
 	  echo "Run the command below to create the kubernets cluster."
 	  printf "%.0s#" {1..110}
-	  echo -e "\nsudo kubeadm init --apiserver-advertise-address ${NODE_IP} --control-plane-endpoint ${NODE_IP}"
+	  echo -e "\nsudo kubeadm init --apiserver-advertise-address ${NODE_IP} --control-plane-endpoint ${NODE_IP} --node-name #{k8master_hostname} --ignore-preflight-errors Swap"
 	  printf "%.0s#" {1..110}
 	  echo "" 
     SHELL
@@ -73,4 +73,7 @@ Vagrant.configure("2") do |config|
     sudo dos2unix /tmp/kubernets_manage.sh
 	bash -x /tmp/kubernets_manage.sh
   SHELL
+  config.trigger.after :status, type: :command do |t|
+  t.info = "Showing status of all VMs!"
+end
 end
