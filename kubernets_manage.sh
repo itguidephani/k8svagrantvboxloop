@@ -1,5 +1,6 @@
 #!/bin/bash
 
+###  K8S Cluster ####
 export k8s_modules01="overlay br_netfilter"
 export k8s_kernel_nw01="net.ipv4.ip_forward net.bridge.bridge-nf-call-iptables net.bridge.bridge-nf-call-ip6tables"
 
@@ -7,6 +8,17 @@ export KUBECTLVER='v1.31'
 export INSTALLURL_DEB="https://pkgs.k8s.io/core:/stable:/${KUBECTLVER}/deb"
 export APTKY_DEB_K8='/etc/apt/keyrings/kubernetes-apt-keyring.gpg'
 export DEBREPO="/etc/apt/sources.list.d/kubernetes.list"
+
+export SYSTMD='sudo systemctl'
+export DISABLE_DAEMON='apparmor'
+export ENABLE_DAEMON='containerd kubelet'
+
+export APTGET='sudo apt'
+export REQ_PPK='apt-transport-https ca-certificates curl gpg jq'
+
+export KUBE_PKG='containerd jq kubelet kubeadm kubectl'
+
+### END K8S Cluster ####
 
 # export HELM_INSTALLURL='https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3'
 
@@ -55,11 +67,11 @@ K8sNW_KERNL_Parameters(){
 
 K8sNW_KERNL_Parameters
 
-sudo apt-get clean all
+$APTGET clean all
 echo "Update packages list"
-sudo apt-get update
+$APTGET update
 echo "Install containerd"
-sudo apt-get -y install containerd apt-transport-https ca-certificates curl gpg jq kubelet kubeadm kubectl
+$APTGET -y install $REQ_PPK $KUBE_PKG
 
 containerdCGroup_Driver(){
 	if [ ! -f /etc/containerd/config.toml ]; then
@@ -76,12 +88,11 @@ containerdCGroup_Driver(){
 
 containerdCGroup_Driver
 
-sudo systemctl disable apparmor; sudo systemctl stop apparmor
+$SYSTMD disable $DISABLE_DAEMON; $SYSTMD stop $DISABLE_DAEMON
 echo "Restarting containerd"
-sudo systemctl daemon-reload
-sudo systemctl restart containerd kubelet
-sudo systemctl enable containerd kubelet
-sudo apt-mark hold kubelet kubeadm kubectl
+$SYSTMD daemon-reload
+$SYSTMD restart $ENABLE_DAEMON; $SYSTMD enable $ENABLE_DAEMON
+$APTGET-mark hold $KUBE_PKG
 #
 echo "Installing helm packager"
 # sudo curl $HELM_INSTALLURL | bash
