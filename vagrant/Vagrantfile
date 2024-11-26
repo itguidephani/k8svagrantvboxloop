@@ -24,7 +24,8 @@ Vagrant.configure("2") do |config|
 	  printf "%.0s#" {1..110}
 	  echo -e "\nsudo kubeadm init --apiserver-advertise-address ${NODE_IP} --control-plane-endpoint ${NODE_IP} --node-name #{k8master_hostname} --ignore-preflight-errors Swap"
 	  printf "%.0s#" {1..110}
-	  echo "" 
+	  echo ""
+	  sudo kubeadm config images pull
     SHELL
   end
 
@@ -53,7 +54,7 @@ Vagrant.configure("2") do |config|
   end
 
   # Shared Provisioning for All Nodes
-  config.vm.provision "file", source: "kubernets_manage.sh", destination: "/tmp/kubernets_manage.sh"
+  config.vm.provision "file", source: "../shellscript/kubernets_manage.sh", destination: "/tmp/kubernets_manage.sh"
   config.vm.provision "shell", inline: <<-SHELL
 #    # Add entries for master and workers in /etc/hosts
     echo "#{K8S_IP_NW}#{M_IP_START} #{k8master_hostname}" | sudo tee -a /etc/hosts > /dev/null
