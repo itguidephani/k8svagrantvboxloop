@@ -23,7 +23,7 @@ export ETCD_VER=v3.5.17
 export GOOGLE_URL='https://storage.googleapis.com/etcd'
 export GITHUB_URL='https://github.com/etcd-io/etcd/releases/download'
 export DOWNLOAD_URL="${GOOGLE_URL}"
-export ETCDDDIR='/opt/kubernets/etcd'
+export ETCDDDIR='/opt/kubernets-tools/etcd'
 
 ### END K8S Cluster ####
 
