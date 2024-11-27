@@ -18,6 +18,13 @@ export APTGET='sudo apt-get'
 export REQ_PPK='apt-transport-https ca-certificates curl gpg jq'
 
 export KUBE_PKG='containerd jq kubelet kubeadm kubectl'
+
+export ETCD_VER=v3.5.17
+export GOOGLE_URL='https://storage.googleapis.com/etcd'
+export GITHUB_URL='https://github.com/etcd-io/etcd/releases/download'
+export DOWNLOAD_URL="${GOOGLE_URL}"
+export ETCDDDIR='/opt/kubernets/etcd'
+
 ### END K8S Cluster ####
 
 SwapOF(){
@@ -92,10 +99,22 @@ containerdCGroup_Driver(){
 	fi
  }
 
+Install_etcd_cli(){
+   sudo mkdir -p $ETCDDDIR
+   sudo curl -L ${DOWNLOAD_URL}/${ETCD_VER}/etcd-${ETCD_VER}-linux-amd64.tar.gz -o etcd-${ETCD_VER}-linux-amd64.tar.gz
+   sudo tar xzvf etcd-${ETCD_VER}-linux-amd64.tar.gz -C $ETCDDDIR/etcd
+   sudo rm -f /usr/local/bin/etcd /usr/local/bin/etcdctl /usr/local/bin/etcdutl
+   sudo ln -s $ETCDDDIR/etcd-$ETCD_VER-linux-amd64/etcdctl /usr/local/bin/etcd
+   sudo ln -s $ETCDDDIR/etcd-$ETCD_VER-linux-amd64/etcdctl /usr/local/bin/etcdctl
+   sudo ln -s $ETCDDDIR/etcd-$ETCD_VER-linux-amd64/etcdctl /usr/local/bin/etcdutl
+ }
+
+
 InstallREQPKG
 KernelContainerD_Modules
 K8sNW_KERNL_Parameters
 containerdCGroup_Driver
+Install_etcd_cli
 
 $SYSTMD disable $DISABLE_DAEMON; $SYSTMD stop $DISABLE_DAEMON
 echo "Restarting containerd"
@@ -106,3 +125,4 @@ sudo apt-mark hold $KUBE_PKG
 echo "Installing helm packager"
 # sudo curl $HELM_INSTALLURL | bash
 sudo snap install helm --classic
+
