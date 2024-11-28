@@ -1,5 +1,14 @@
 #!/bin/bash
 ###  K8S Cluster ####
+set -e
+
+# ROLE=$1
+## Check if an argument is provided
+# if [ "$#" -ne 1 ]; then
+#     echo "Usage: $0 <master|worker>"
+#     exit 1
+# fi
+
 export k8s_modules01=("overlay" "br_netfilter")
 export KRMODULESK8S='/etc/modules-load.d/k8s_modules.conf'
 export k8s_kernel_nw01=("net.ipv4.ip_forward=1" "net.bridge.bridge-nf-call-iptables=1" "net.bridge.bridge-nf-call-ip6tables=1")
@@ -109,20 +118,41 @@ Install_etcd_cli(){
    sudo ln -s $ETCDDDIR/etcd-$ETCD_VER-linux-amd64/etcdctl /usr/local/bin/etcdutl
  }
 
+Install_etcd_cli(){
+   sudo mkdir -p $ETCDDDIR
+   sudo curl -L ${DOWNLOAD_URL}/${ETCD_VER}/etcd-${ETCD_VER}-linux-amd64.tar.gz -o $ETCDDDIR/etcd-${ETCD_VER}-linux-amd64.tar.gz
+   sudo tar xzvf $ETCDDDIR/etcd-${ETCD_VER}-linux-amd64.tar.gz -C $ETCDDDIR/
+   sudo rm -f /usr/local/bin/etcd /usr/local/bin/etcdctl /usr/local/bin/etcdutl
+   sudo ln -s $ETCDDDIR/etcd-$ETCD_VER-linux-amd64/etcdctl /usr/local/bin/etcd
+   sudo ln -s $ETCDDDIR/etcd-$ETCD_VER-linux-amd64/etcdctl /usr/local/bin/etcdctl
+   sudo ln -s $ETCDDDIR/etcd-$ETCD_VER-linux-amd64/etcdctl /usr/local/bin/etcdutl
+ }
 
 InstallREQPKG
 KernelContainerD_Modules
 K8sNW_KERNL_Parameters
 containerdCGroup_Driver
-Install_etcd_cli
 
 $SYSTMD disable $DISABLE_DAEMON; $SYSTMD stop $DISABLE_DAEMON
 echo "Restarting containerd"
 $SYSTMD daemon-reload
 $SYSTMD restart $ENABLE_DAEMON; $SYSTMD enable $ENABLE_DAEMON
 sudo apt-mark hold $KUBE_PKG
-#
-echo "Installing helm packager"
-# sudo curl $HELM_INSTALLURL | bash
-sudo snap install helm --classic
 
+Install_helm_cli(){
+	echo "Installing helm packager"
+	# sudo curl $HELM_INSTALLURL | bash
+	sudo snap install helm --classic
+ }
+
+Check_role_n_assign(){
+	if [ "$ROLE" == "master" ]; then
+		Install_etcd_cli
+		Install_helm_cli
+	elif [ "$ROLE" == "worker" ]; then
+		echo "worker node"
+	else
+		echo "Invalid argument. Please specify 'master' or 'worker'."
+    exit 1
+	fi
+  }
