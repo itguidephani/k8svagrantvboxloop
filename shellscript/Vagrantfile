@@ -14,44 +14,17 @@ Vagrant.configure("2") do |config|
   config.vm.hostname = "ubuntu-jammy-vm"
 
   # Provisioning script (optional)
+  config.vm.provision "file", source: "../shellscript/custum_k8s_manage.sh", destination: "/tmp/custum_k8s_manage.sh"
   config.vm.provision "shell", inline: <<-SHELL
-	export k8sVERSION=v1.31.3
-	export k8sURL=https://dl.k8s.io/${k8sVERSION}/bin/linux/amd64
-	export k8sBIN="apiextensions-apiserver kube-aggregator kube-apiserver kube-controller-manager kube-log-runner kube-proxy kube-scheduler kubeadm kubectl kubectl-convert kubelet mounter"
-	export DOWNk8s="/opt/kubernetes/bin/$k8sVERSION"
-
-	wget-bin-k8s(){
-		# Create target directory once
-		sudo mkdir -p $DOWNk8s
-    
-		# Loop through each binary and download it
-		for k8sbins in $k8sBIN; do
-			# Download binary
-			sudo wget -P $DOWNk8s ${k8sURL}/$k8sbins
-			sudo chown -R root:root $DOWNk8s
-			sudo chmod +x $DOWNk8s/*
-			# Remove old symlink if it exists
-			sudo rm -f /usr/local/bin/$k8sbins
-			# Create a new symlink
-			sudo ln -s $DOWNk8s/$k8sbins /usr/local/bin/$k8sbins
-		done
-	}
-	
-	wget-bin-k8s
-	export ETCD_VER=v3.5.17
-	export GOOGLE_URL='https://storage.googleapis.com/etcd'
-	export GITHUB_URL='https://github.com/etcd-io/etcd/releases/download'
-	export DOWNLOAD_URL="${GOOGLE_URL}"
-	export ETCDDDIR='/opt/kubernets-tools/etcd'
-	Install_etcd_cli(){
-   sudo mkdir -p $ETCDDDIR
-   sudo curl -L ${DOWNLOAD_URL}/${ETCD_VER}/etcd-${ETCD_VER}-linux-amd64.tar.gz -o $ETCDDDIR/etcd-${ETCD_VER}-linux-amd64.tar.gz
-   sudo tar xzvf $ETCDDDIR/etcd-${ETCD_VER}-linux-amd64.tar.gz -C $ETCDDDIR/
-   sudo rm -f /usr/local/bin/etcd /usr/local/bin/etcdutl /usr/local/bin/etcdctl
-   sudo ln -s $ETCDDDIR/etcd-$ETCD_VER-linux-amd64/etcd /usr/local/bin/etcd
-   sudo ln -s $ETCDDDIR/etcd-$ETCD_VER-linux-amd64/etcdctl /usr/local/bin/etcdctl
-   sudo ln -s $ETCDDDIR/etcd-$ETCD_VER-linux-amd64/etcdutl /usr/local/bin/etcdutl
- }
- Install_etcd_cli
+    # Install utilities and run the Kubernetes management script
+	sudo rm -f /etc/machine-id /var/lib/dbus/machine-id
+	sudo dbus-uuidgen --ensure=/var/lib/dbus/machine-id
+	sudo ln -s /var/lib/dbus/machine-id /etc/machine-id
+	sudo sed -i '/jammy/d' /etc/hosts  &>/dev/null
+	sudo sed -i '/ubuntu/d' /etc/hosts  &>/dev/null
+	sudo apt-get update
+    sudo apt-get install -y dos2unix net-tools
+    sudo dos2unix /tmp/custum_k8s_manage.sh
+	bash -x /tmp/custum_k8s_manage.sh
   SHELL
 end
