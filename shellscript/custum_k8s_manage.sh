@@ -4,9 +4,12 @@
 
 export VBOX_INTERNAL=192.168.56
 export LOADBALANCER_ADDRESS=${VBOX_INTERNAL}.30
+export INTERNAL_IP=$(ip addr show | grep "inet " | grep ${VBOX_INTERNAL} | awk '{print $2}' | cut -d / -f 1)
 
 export KUBE_TOOLS_DUMP="/opt/kubernets-tools"
-export KUBE_TOOLS_CERTS="$KUBE_TOOLS_DUMP/certs/"
+export KUBE_TOOLS_CERTS="$KUBE_TOOLS_DUMP/certs"
+export KUBE_TOOLS_CONFD="$KUBE_TOOLS_DUMP/conf"
+export KUBE_TOOLS_SYSDS="$KUBE_TOOLS_DUMP/systd"
 
 export k8sVERSION=v1.31.3
 export k8sURL=https://dl.k8s.io/${k8sVERSION}/bin/linux/amd64
@@ -34,7 +37,30 @@ export REQ_PPK='apt-transport-https ca-certificates curl gpg jq'
 
 export KUBE_PKG='containerd'
 
-sudo mkdir -p $KUBE_TOOLS_CERTS
+#### CERTS NAMES #####
+
+# Certificate Authority
+export K8S_CA_KEY='k8s_ca.key' K8S_CA_CSR='k8s_ca.csr' K8S_CA_CRT='k8s_ca.crt'
+# Admin Certificate
+export K8S_ADMIN_KEY='k8s_admin.key' K8S_ADMIN_CSR='k8s_admin.csr' K8S_ADMIN_CRT='k8s_admin.crt'
+# The Controller Manager Client Certificate
+export K8S_CONTOLLER_MGR_KEY='k8s_kube-controller-manager.key' K8S_CONTOLLER_MGR_CSR='k8s_kube-controller-manager.csr' K8S_CONTOLLER_MGR_CRT='k8s_kube-controller-manager.crt'
+# The Kube Proxy Client Certificate
+export K8S_PROXY_KEY='k8s_kube-proxy.key' K8S_PROXY_CSR='k8s_kube-proxy.csr' K8S_PROXY_CRT='k8s_kube-proxy.crt'
+# The Scheduler Client Certificate
+export K8S_SCHEDULER_KEY='k8s_kube-scheduler.key' K8S_SCHEDULER_CSR='k8s_kube-scheduler.csr' K8S_SCHEDULER_CRT='k8s_kube-scheduler.crt'
+# The Kubernetes API Server Certificate
+export K8S_API_KEY='k8s_kube-apiserver.key' K8S_API_CSR='k8s_kube-apiserver.csr' K8S_API_CRT='k8s_kube-apiserver.crt'
+# The Service Account Certificate
+export K8S_SERVICE_ACCOUNT_KEY='k8s_kube-service-account.key' K8S_SERVICE_ACCOUNT_CSR='k8s_kube-service-account.csr' K8S_SERVICE_ACCOUNT_CRT='k8s_kube-service-account.crt'
+# The ETCD Server Certificate
+export K8S_ETCD_SERVER_KEY='k8s_kube-etcd-server.key' K8S_ETCD_SERVER_CSR='k8s_kube-etcd-server.csr' K8S_ETCD_SERVER_CRT='k8s_kube-etcd-server.crt'
+
+export VERIFY_CERTS_FILES_PRESENT=("$K8S_CA_KEY" "$K8S_CA_CSR" "$K8S_CA_CRT" "$K8S_ADMIN_KEY"  "$K8S_ADMIN_CSR" "$K8S_ADMIN_CRT" "$K8S_CONTOLLER_MGR_KEY" "$K8S_CONTOLLER_MGR_CSR" "$K8S_CONTOLLER_MGR_CRT" "$K8S_PROXY_KEY" "$K8S_PROXY_CSR" "$K8S_PROXY_CRT" "$K8S_SCHEDULER_KEY" "$K8S_SCHEDULER_CSR" "$K8S_SCHEDULER_CRT" "$K8S_API_KEY" "$K8S_API_CSR" "$K8S_API_CRT" "$K8S_SERVICE_ACCOUNT_KEY" "$K8S_SERVICE_ACCOUNT_CSR" "$K8S_SERVICE_ACCOUNT_CRT" "$K8S_ETCD_SERVER_KEY" "$K8S_ETCD_SERVER_CSR" "$K8S_ETCD_SERVER_CRT")
+
+#### END CERTS NAMES #####
+
+sudo mkdir -p $KUBE_TOOLS_CERTS $KUBE_TOOLS_CONFD $KUBE_TOOLS_SYSDS
 
 SwapOF(){
     swap_status=$(swapon --noheadings);	if [ -z "$swap_status" ]; then  echo "Swap memory is OFF."; else sudo swapoff -a; sudo sed -i '/swap/ s/^\(.*\)$/#\1/g' /etc/fstab;(echo "@reboot /sbin/swapoff -a") | sudo crontab - || true; fi
@@ -125,6 +151,7 @@ wget-bin-k8s(){
  }
 	
 Install_etcd_cli(){
+
    sudo mkdir -p $ETCDDDIR
    sudo curl -L ${DOWNLOAD_URL}/${ETCD_VER}/etcd-${ETCD_VER}-linux-amd64.tar.gz -o $ETCDDDIR/etcd-${ETCD_VER}-linux-amd64.tar.gz
    sudo tar xzvf $ETCDDDIR/etcd-${ETCD_VER}-linux-amd64.tar.gz -C $ETCDDDIR/
@@ -182,45 +209,120 @@ EOF
 
 creating_openssl_certs_kube8s(){
 	# Certificate Authority
-	openssl genrsa -out $KUBE_TOOLS_CERTS/k8s_ca.key 2048
-	openssl req -new -key $KUBE_TOOLS_CERTS/k8s_ca.key -subj "/CN=KUBERNETES-CA" -out $KUBE_TOOLS_CERTS/k8s_ca.csr
-	openssl x509 -req -in $KUBE_TOOLS_CERTS/k8s_ca.csr -signkey $KUBE_TOOLS_CERTS/k8s_ca.key -CAcreateserial  -out $KUBE_TOOLS_CERTS/k8s_ca.crt -days 1000
+	openssl genrsa -out $KUBE_TOOLS_CERTS/$K8S_CA_KEY 2048
+	openssl req -new -key $KUBE_TOOLS_CERTS/$K8S_CA_KEY -subj "/CN=KUBERNETES-CA" -out $KUBE_TOOLS_CERTS/$K8S_CA_CSR
+	openssl x509 -req -in $KUBE_TOOLS_CERTS/$K8S_CA_CSR -signkey $KUBE_TOOLS_CERTS/$K8S_CA_KEY -CAcreateserial  -out $KUBE_TOOLS_CERTS/$K8S_CA_CRT -days 1000
 
 	# Admin Certificate
-	openssl genrsa -out $KUBE_TOOLS_CERTS/k8s_admin.key 2048
-	openssl req -new -key $KUBE_TOOLS_CERTS/k8s_admin.key -subj "/CN=admin/O=system:masters" -out $KUBE_TOOLS_CERTS/k8s_admin.csr
-	openssl x509 -req -in $KUBE_TOOLS_CERTS/k8s_admin.csr -CA $KUBE_TOOLS_CERTS/k8s_ca.crt -CAkey $KUBE_TOOLS_CERTS/k8s_ca.key -CAcreateserial  -out $KUBE_TOOLS_CERTS/k8s_admin.crt -days 1000
+	openssl genrsa -out $KUBE_TOOLS_CERTS/$K8S_ADMIN_KEY 2048
+	openssl req -new -key $KUBE_TOOLS_CERTS/$K8S_ADMIN_KEY -subj "/CN=admin/O=system:masters" -out $KUBE_TOOLS_CERTS/$K8S_ADMIN_CSR
+	openssl x509 -req -in $KUBE_TOOLS_CERTS/$K8S_ADMIN_CSR -CA $KUBE_TOOLS_CERTS/$K8S_CA_CRT -CAkey $KUBE_TOOLS_CERTS/$K8S_CA_KEY -CAcreateserial  -out $KUBE_TOOLS_CERTS/$K8S_ADMIN_CRT -days 1000
 
 	# The Controller Manager Client Certificate
-	openssl genrsa -out $KUBE_TOOLS_CERTS/kube-controller-manager.key 2048
-	openssl req -new -key $KUBE_TOOLS_CERTS/kube-controller-manager.key -subj "/CN=system:kube-controller-manager/O=system:kube-controller-manager" -out $KUBE_TOOLS_CERTS/kube-controller-manager.csr
-	openssl x509 -req -in $KUBE_TOOLS_CERTS/kube-controller-manager.csr -CA $KUBE_TOOLS_CERTS/k8s_ca.crt -CAkey $KUBE_TOOLS_CERTS/k8s_ca.key -CAcreateserial -out $KUBE_TOOLS_CERTS/kube-controller-manager.crt -days 1000
+	openssl genrsa -out $KUBE_TOOLS_CERTS/$K8S_CONTOLLER_MGR_KEY 2048
+	openssl req -new -key $KUBE_TOOLS_CERTS/$K8S_CONTOLLER_MGR_KEY -subj "/CN=system:kube-controller-manager/O=system:kube-controller-manager" -out $KUBE_TOOLS_CERTS/$K8S_CONTOLLER_MGR_CSR
+	openssl x509 -req -in $KUBE_TOOLS_CERTS/$K8S_CONTOLLER_MGR_CSR -CA $KUBE_TOOLS_CERTS/$K8S_CA_CRT -CAkey $KUBE_TOOLS_CERTS/$K8S_CA_KEY -CAcreateserial -out $KUBE_TOOLS_CERTS/$K8S_CONTOLLER_MGR_CRT -days 1000
 
 	# The Kube Proxy Client Certificate
-	openssl genrsa -out $KUBE_TOOLS_CERTS/kube-proxy.key 2048
-	openssl req -new -key $KUBE_TOOLS_CERTS/kube-proxy.key -subj "/CN=system:kube-proxy/O=system:kube-proxy" -out $KUBE_TOOLS_CERTS/kube-proxy.csr
-	openssl x509 -req -in $KUBE_TOOLS_CERTS/kube-proxy.csr -CA $KUBE_TOOLS_CERTS/k8s_ca.crt -CAkey $KUBE_TOOLS_CERTS/k8s_ca.key -CAcreateserial  -out $KUBE_TOOLS_CERTS/kube-proxy.crt -days 1000
+	openssl genrsa -out $KUBE_TOOLS_CERTS/$K8S_PROXY_KEY 2048
+	openssl req -new -key $KUBE_TOOLS_CERTS/$K8S_PROXY_KEY -subj "/CN=system:kube-proxy/O=system:kube-proxy" -out $KUBE_TOOLS_CERTS/$K8S_PROXY_CSR
+	openssl x509 -req -in $KUBE_TOOLS_CERTS/$K8S_PROXY_CSR -CA $KUBE_TOOLS_CERTS/$K8S_CA_CRT -CAkey $KUBE_TOOLS_CERTS/$K8S_CA_KEY -CAcreateserial  -out $KUBE_TOOLS_CERTS/$K8S_PROXY_CRT -days 1000
 
 	# The Scheduler Client Certificate
-	openssl genrsa -out $KUBE_TOOLS_CERTS/kube-scheduler.key 2048
-	openssl req -new -key $KUBE_TOOLS_CERTS/kube-scheduler.key -subj "/CN=system:kube-scheduler/O=system:kube-scheduler" -out $KUBE_TOOLS_CERTS/kube-scheduler.csr
-	openssl x509 -req -in $KUBE_TOOLS_CERTS/kube-scheduler.csr -CA $KUBE_TOOLS_CERTS/k8s_ca.crt -CAkey $KUBE_TOOLS_CERTS/k8s_ca.key -CAcreateserial  -out $KUBE_TOOLS_CERTS/kube-scheduler.crt -days 1000
+	openssl genrsa -out $KUBE_TOOLS_CERTS/$K8S_SCHEDULER_KEY 2048
+	openssl req -new -key $KUBE_TOOLS_CERTS/$K8S_SCHEDULER_KEY -subj "/CN=system:kube-scheduler/O=system:kube-scheduler" -out $KUBE_TOOLS_CERTS/$K8S_SCHEDULER_CSR
+	openssl x509 -req -in $KUBE_TOOLS_CERTS/$K8S_SCHEDULER_CSR -CA $KUBE_TOOLS_CERTS/$K8S_CA_CRT -CAkey $KUBE_TOOLS_CERTS/$K8S_CA_KEY -CAcreateserial  -out $KUBE_TOOLS_CERTS/$K8S_SCHEDULER_CRT -days 1000
 
 	# The Kubernetes API Server Certificate
-	openssl genrsa -out $KUBE_TOOLS_CERTS/kube-apiserver.key 2048
-	openssl req -new -key $KUBE_TOOLS_CERTS/kube-apiserver.key -subj "/CN=kube-apiserver" -out $KUBE_TOOLS_CERTS/kube-apiserver.csr -config $KUBE_TOOLS_CERTS/openssl.cnf
-	openssl x509 -req -in $KUBE_TOOLS_CERTS/kube-apiserver.csr -CA $KUBE_TOOLS_CERTS/k8s_ca.crt -CAkey $KUBE_TOOLS_CERTS/k8s_ca.key -CAcreateserial -out $KUBE_TOOLS_CERTS/kube-apiserver.crt -extensions v3_req -extfile $KUBE_TOOLS_CERTS/openssl.cnf -days 1000
-
-	# The ETCD Server Certificate
-	openssl genrsa -out $KUBE_TOOLS_CERTS/etcd-server.key 2048
-	openssl req -new -key $KUBE_TOOLS_CERTS/etcd-server.key -subj "/CN=etcd-server" -out $KUBE_TOOLS_CERTS/etcd-server.csr -config $KUBE_TOOLS_CERTS/openssl-etcd.cnf
-	openssl x509 -req -in $KUBE_TOOLS_CERTS/etcd-server.csr -CA $KUBE_TOOLS_CERTS/k8s_ca.crt -CAkey $KUBE_TOOLS_CERTS/k8s_ca.key -CAcreateserial  -out $KUBE_TOOLS_CERTS/etcd-server.crt -extensions v3_req -extfile $KUBE_TOOLS_CERTS/openssl-etcd.cnf -days 1000
+	openssl genrsa -out $KUBE_TOOLS_CERTS/$K8S_API_KEY 2048
+	openssl req -new -key $KUBE_TOOLS_CERTS/$K8S_API_KEY -subj "/CN=kube-apiserver" -out $KUBE_TOOLS_CERTS/$K8S_API_CSR -config $KUBE_TOOLS_CERTS/openssl.cnf
+	openssl x509 -req -in $KUBE_TOOLS_CERTS/$K8S_API_CSR -CA $KUBE_TOOLS_CERTS/$K8S_CA_CRT -CAkey $KUBE_TOOLS_CERTS/$K8S_CA_KEY -CAcreateserial -out $KUBE_TOOLS_CERTS/$K8S_API_CRT -extensions v3_req -extfile $KUBE_TOOLS_CERTS/openssl.cnf -days 1000
 
 	# The Service Account Certificate
-	openssl genrsa -out $KUBE_TOOLS_CERTS/service-account.key 2048
-	openssl req -new -key $KUBE_TOOLS_CERTS/service-account.key -subj "/CN=service-accounts" -out $KUBE_TOOLS_CERTS/service-account.csr
-	openssl x509 -req -in $KUBE_TOOLS_CERTS/service-account.csr -CA $KUBE_TOOLS_CERTS/k8s_ca.crt -CAkey $KUBE_TOOLS_CERTS/k8s_ca.key -CAcreateserial  -out $KUBE_TOOLS_CERTS/service-account.crt -days 1000
+	openssl genrsa -out $KUBE_TOOLS_CERTS/$K8S_SERVICE_ACCOUNT_KEY 2048
+	openssl req -new -key $KUBE_TOOLS_CERTS/$K8S_SERVICE_ACCOUNT_KEY -subj "/CN=service-accounts" -out $KUBE_TOOLS_CERTS/$K8S_SERVICE_ACCOUNT_CSR
+	openssl x509 -req -in $KUBE_TOOLS_CERTS/$K8S_SERVICE_ACCOUNT_CSR -CA $KUBE_TOOLS_CERTS/$K8S_CA_CRT -CAkey $KUBE_TOOLS_CERTS/$K8S_CA_KEY -CAcreateserial  -out $KUBE_TOOLS_CERTS/$K8S_SERVICE_ACCOUNT_CRT -days 1000
+
+	# The ETCD Server Certificate
+	openssl genrsa -out $KUBE_TOOLS_CERTS/$K8S_ETCD_SERVER_KEY 2048
+	openssl req -new -key $KUBE_TOOLS_CERTS/$K8S_ETCD_SERVER_KEY -subj "/CN=etcd-server" -out $KUBE_TOOLS_CERTS/$K8S_ETCD_SERVER_CSR -config $KUBE_TOOLS_CERTS/openssl-etcd.cnf
+	openssl x509 -req -in $KUBE_TOOLS_CERTS/$K8S_ETCD_SERVER_CSR -CA $KUBE_TOOLS_CERTS/$K8S_CA_CRT -CAkey $KUBE_TOOLS_CERTS/$K8S_CA_KEY -CAcreateserial  -out $KUBE_TOOLS_CERTS/$K8S_ETCD_SERVER_CRT -extensions v3_req -extfile $KUBE_TOOLS_CERTS/openssl-etcd.cnf -days 1000
+    	
+	for certfls99 in "${VERIFY_CERTS_FILES_PRESENT[@]}"; do
+		if [ ! -e "$KUBE_TOOLS_CERTS/$certfls99" ]; then
+			echo "There is missing certs file $certfls99"
+		fi
+	done
  }
+
+###############################
+#### ETCD-SERVICES-START ######
+###############################
+
+etcd_systemd_srv(){
+export ETCD_NAME=$(hostname -s)
+ 
+# https://etcd.io/docs/${ETCD_VER}/op-guide/configuration/
+
+cat <<EOF | sudo tee /etc/systemd/system/etcd.service
+[Unit]
+Description=etcd
+Documentation=https://github.com/coreos
+
+[Service]
+ExecStart=/usr/local/bin/etcd \\
+  --name ${ETCD_NAME} \\
+  --cert-file=/etc/etcd/$K8S_ETCD_SERVER_CRT \\
+  --key-file=/etc/etcd/$K8S_ETCD_SERVER_KEY \\
+  --peer-cert-file=/etc/etcd/$K8S_ETCD_SERVER_CRT \\
+  --peer-key-file=/etc/etcd/$K8S_ETCD_SERVER_KEY \\
+  --trusted-ca-file=/etc/etcd/$K8S_CA_CRT \\
+  --peer-trusted-ca-file=/etc/etcd/$K8S_CA_CRT \\
+  --peer-client-cert-auth \\
+  --client-cert-auth \\
+  --initial-advertise-peer-urls https://${INTERNAL_IP}:2380 \\
+  --listen-peer-urls https://${INTERNAL_IP}:2380 \\
+  --listen-client-urls https://${INTERNAL_IP}:2379,https://127.0.0.1:2379 \\
+  --advertise-client-urls https://${INTERNAL_IP}:2379 \\
+  --initial-cluster-token etcd-cluster-0 \\
+  --initial-cluster master01=https://${VBOX_INTERNAL}.11:2380,master02=https://${VBOX_INTERNAL}.12:2380 \\
+  --initial-cluster-state new \\
+  --data-dir=/var/lib/etcd
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+}
+
+etcd_cfg_req_files(){
+	sudo mkdir -p /etc/etcd /var/lib/etcd
+	sudo cp $KUBE_TOOLS_CERTS/$K8S_CA_CRT $KUBE_TOOLS_CERTS/$K8S_ETCD_SERVER_KEY $KUBE_TOOLS_CERTS/$K8S_ETCD_SERVER_CRT /etc/etcd
+	
+	if [ ! -f "/etc/etcd/$K8S_CA_CRT" ]; then
+		   echo "Error: Missing CA certificate ($K8S_CA_CRT)"
+	fi
+	
+	# Validate key and certificate
+	echo "Validating $K8S_ETCD_SERVER_KEY and $K8S_ETCD_SERVER_CRT ..."
+	if [ "$(openssl rsa -noout -modulus -in "/etc/etcd/$K8S_ETCD_SERVER_KEY" | openssl md5)" != "$(openssl x509 -noout -modulus -in "/etc/etcd/$K8S_ETCD_SERVER_CRT" | openssl md5)" ]; then
+		echo "Error: Private key ($K8S_ETCD_SERVER_KEY) and certificate ($K8S_ETCD_SERVER_CRT) do not match!"
+		exit 1
+	fi
+
+	# Verify the certificate is signed by the CA
+	if ! openssl verify -CAfile "$KUBE_TOOLS_CERTS/$K8S_CA_CRT" "$KUBE_TOOLS_CERTS/$K8S_ETCD_SERVER_CRT" > /dev/null 2>&1; then
+		echo "Error: Certificate $K8S_ETCD_SERVER_CRT is not signed by the CA!"
+		exit 1
+	fi
+	echo "Success: $K8S_ETCD_SERVER_KEY and $K8S_ETCD_SERVER_CRT are valid."
+	etcd_systemd_srv
+ }
+
+###############################
+#### ETCD-SERVICES-END ########
+###############################
 
 FinalJOBS(){
 	InstallREQPKG
@@ -243,6 +345,8 @@ Check_role_n_assign(){
 	fi
   }
 
+Install_etcd_cli
 create_openssl_cnf_kube
 create_openssl_cnf_etcd
 creating_openssl_certs_kube8s
+etcd_cfg_req_files

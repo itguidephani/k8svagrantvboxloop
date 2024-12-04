@@ -1,6 +1,7 @@
 
 
 reouahdhasd(){
+############################################# START ############################################################################
 etup Multi-Master Kubernetes Cluster - THE HARD WAY
 This article will help you to setup and install Multi-Master kubernetes cluster THE HARD WAY using Vagrant and VirtualBox on Ubuntu:18.04LTS.
 
@@ -118,6 +119,11 @@ openssl genrsa -out service-account.key 2048
 openssl req -new -key service-account.key -subj "/CN=service-accounts" -out service-account.csr
 openssl x509 -req -in service-account.csr -CA ca.crt -CAkey ca.key -CAcreateserial  -out service-account.crt -days 1000
 }
+
+############################################# END ############################################################################
+
+############################################# START ############################################################################
+
 Step:-3.4 - Moving certificates to both master VM
 for instance in master01 master02; do
   scp ca.crt ca.key kube-apiserver.key kube-apiserver.crt \
@@ -265,6 +271,10 @@ COMMAND:- wget https://github.com/kubernetes/kubernetes/releases/download/v1.22.
 Step:-6.1.2 - Extract the Binary - All Masters
 COMMAND:- tar -xzvf kubernetes.tar.gz
 
+############################################# END ############################################################################
+
+############################################# START ############################################################################
+
 Step:-6.1.3 - Read ETCD Version - All Masters
 COMMAND:- cat kubernetes/hack/lib/etcd.sh | grep 'ETCD_VERSION=${ETCD_VERSION'
 
@@ -347,6 +357,8 @@ sudo ETCDCTL_API=3 etcdctl member list \
   --cert=/etc/etcd/etcd-server.crt \
   --key=/etc/etcd/etcd-server.key
 Output:-
+
+############################################# END ############################################################################
 
 1761bef04e125165, started, master01, https://192.168.56.11:2380, https://192.168.56.11:2379, false
 d60f170a453bcaf4, started, master02, https://192.168.56.12:2380, https://192.168.56.12:2379, false
