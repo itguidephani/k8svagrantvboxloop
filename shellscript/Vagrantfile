@@ -1,17 +1,21 @@
 # Vagrantfile
+K8S_IP_NW = "192.168.10."
+M_IP_START = 40
+W_IP_START = 50
+k8master_hostname="k8smaster01"
 
 Vagrant.configure("2") do |config|
   # Use the ubuntu/jammy64 base box
-  config.vm.box = "ubuntu/jammy64"
-
+  config.vm.define "k8smst" do |k8mst01|
+    k8mst01.vm.box = "ubuntu/jammy64"
+    k8mst01.vm.hostname = k8master_hostname
+    k8mst01.vm.network "private_network", ip: "#{K8S_IP_NW}#{M_IP_START}"
+  end
   # Configure VM resources
   config.vm.provider "virtualbox" do |vb|
     vb.memory = "1024"      # Set memory to 1 GB
     vb.cpus = 2            # Set CPU count to 2
   end
-
-  # Define VM hostname
-  config.vm.hostname = "ubuntu-jammy-vm"
 
   # Provisioning script (optional)
   config.vm.provision "file", source: "../shellscript/custum_k8s_manage.sh", destination: "/tmp/custum_k8s_manage.sh"

@@ -2,14 +2,13 @@
 
 ## https://www.downloadkubernetes.com/ ###
 
-export VBOX_INTERNAL=192.168.56
+export VBOX_INTERNAL=192.168.10
 export LOADBALANCER_ADDRESS=${VBOX_INTERNAL}.30
-export INTERNAL_IP=$(ip addr show | grep "inet " | grep ${VBOX_INTERNAL} | awk '{print $2}' | cut -d / -f 1)
+export LOCAL_LOCAL_INTERNAL_IP=$(ip addr show | grep "inet " | grep ${VBOX_INTERNAL} | awk '{print $2}' | cut -d / -f 1)
+export LOCAL_HST_NAME=$(hostname -s)
 
-export KUBE_TOOLS_DUMP="/opt/kubernets-tools"
-export KUBE_TOOLS_CERTS="$KUBE_TOOLS_DUMP/certs"
-export KUBE_TOOLS_CONFD="$KUBE_TOOLS_DUMP/conf"
-export KUBE_TOOLS_SYSDS="$KUBE_TOOLS_DUMP/systd"
+export KUBE_TOOLS_DUMP="/opt/kubernets-tools" KUBE_TOOLS_CERTS="$KUBE_TOOLS_DUMP/certs" KUBE_TOOLS_CONFD="$KUBE_TOOLS_DUMP/conf" KUBE_TOOLS_SYSDS="$KUBE_TOOLS_DUMP/systd"
+export KUBE_ETC_CFG="/etc/kubernetes" KUBE_VAR_LIB='/var/lib/kubernetes/' KUBE_ETC_CFG_PKI="$KUBE_ETC_CFG/pki" KUBE_ETC_ETCD="/etc/etcd" KUBE_VAR_ETCD="/var/lib/etcd" KUBE_ETC_ETCD_PKI="/etc/etcd/pki"
 
 export k8sVERSION=v1.31.3
 export k8sURL=https://dl.k8s.io/${k8sVERSION}/bin/linux/amd64
@@ -21,7 +20,6 @@ export GOOGLE_URL='https://storage.googleapis.com/etcd'
 export GITHUB_URL='https://github.com/etcd-io/etcd/releases/download'
 export DOWNLOAD_URL="${GOOGLE_URL}"
 export ETCDDDIR="$KUBE_TOOLS_DUMP/etcd"
-
 
 export k8s_modules01=("overlay" "br_netfilter")
 export KRMODULESK8S='/etc/modules-load.d/k8s_modules.conf'
@@ -59,8 +57,6 @@ export K8S_ETCD_SERVER_KEY='k8s_kube-etcd-server.key' K8S_ETCD_SERVER_CSR='k8s_k
 export VERIFY_CERTS_FILES_PRESENT=("$K8S_CA_KEY" "$K8S_CA_CSR" "$K8S_CA_CRT" "$K8S_ADMIN_KEY"  "$K8S_ADMIN_CSR" "$K8S_ADMIN_CRT" "$K8S_CONTOLLER_MGR_KEY" "$K8S_CONTOLLER_MGR_CSR" "$K8S_CONTOLLER_MGR_CRT" "$K8S_PROXY_KEY" "$K8S_PROXY_CSR" "$K8S_PROXY_CRT" "$K8S_SCHEDULER_KEY" "$K8S_SCHEDULER_CSR" "$K8S_SCHEDULER_CRT" "$K8S_API_KEY" "$K8S_API_CSR" "$K8S_API_CRT" "$K8S_SERVICE_ACCOUNT_KEY" "$K8S_SERVICE_ACCOUNT_CSR" "$K8S_SERVICE_ACCOUNT_CRT" "$K8S_ETCD_SERVER_KEY" "$K8S_ETCD_SERVER_CSR" "$K8S_ETCD_SERVER_CRT")
 
 #### END CERTS NAMES #####
-
-sudo mkdir -p $KUBE_TOOLS_CERTS $KUBE_TOOLS_CONFD $KUBE_TOOLS_SYSDS
 
 SwapOF(){
     swap_status=$(swapon --noheadings);	if [ -z "$swap_status" ]; then  echo "Swap memory is OFF."; else sudo swapoff -a; sudo sed -i '/swap/ s/^\(.*\)$/#\1/g' /etc/fstab;(echo "@reboot /sbin/swapoff -a") | sudo crontab - || true; fi
@@ -135,7 +131,7 @@ containerdCGroup_Driver(){
 
 wget-bin-k8s(){
    # Create target directory once
-	sudo mkdir -p $DOWNk8s
+	sudo mkdir -p $DOWNk8s $KUBE_TOOLS_CONFD $KUBE_TOOLS_SYSDS
     
 	# Loop through each binary and download it
 	for k8sbins in $k8sBIN; do
@@ -151,7 +147,6 @@ wget-bin-k8s(){
  }
 	
 Install_etcd_cli(){
-
    sudo mkdir -p $ETCDDDIR
    sudo curl -L ${DOWNLOAD_URL}/${ETCD_VER}/etcd-${ETCD_VER}-linux-amd64.tar.gz -o $ETCDDDIR/etcd-${ETCD_VER}-linux-amd64.tar.gz
    sudo tar xzvf $ETCDDDIR/etcd-${ETCD_VER}-linux-amd64.tar.gz -C $ETCDDDIR/
@@ -208,6 +203,12 @@ EOF
  }
 
 creating_openssl_certs_kube8s(){
+
+	sudo mkdir -p $KUBE_TOOLS_CERTS
+
+	create_openssl_cnf_kube
+	create_openssl_cnf_etcd
+
 	# Certificate Authority
 	openssl genrsa -out $KUBE_TOOLS_CERTS/$K8S_CA_KEY 2048
 	openssl req -new -key $KUBE_TOOLS_CERTS/$K8S_CA_KEY -subj "/CN=KUBERNETES-CA" -out $KUBE_TOOLS_CERTS/$K8S_CA_CSR
@@ -259,9 +260,32 @@ creating_openssl_certs_kube8s(){
 #### ETCD-SERVICES-START ######
 ###############################
 
+etcd_cfg_req_files(){
+	sudo mkdir -p $KUBE_ETC_ETCD $KUBE_VAR_ETCD $KUBE_ETC_ETCD_PKI
+	sudo cp $KUBE_TOOLS_CERTS/$K8S_CA_CRT $KUBE_TOOLS_CERTS/$K8S_ETCD_SERVER_KEY $KUBE_TOOLS_CERTS/$K8S_ETCD_SERVER_CRT $KUBE_ETC_ETCD_PKI
+
+	if [ ! -f "$KUBE_ETC_ETCD/$K8S_CA_CRT" ]; then
+		   echo "Error: Missing CA certificate ($K8S_CA_CRT)"
+	fi
+
+	# Validate key and certificate
+	echo "Validating $K8S_ETCD_SERVER_KEY and $K8S_ETCD_SERVER_CRT ..."
+	if [ "$(openssl rsa -noout -modulus -in "$KUBE_ETC_ETCD/$K8S_ETCD_SERVER_KEY" | openssl md5)" != "$(openssl x509 -noout -modulus -in "$KUBE_ETC_ETCD/$K8S_ETCD_SERVER_CRT" | openssl md5)" ]; then
+		echo "Error: Private key ($K8S_ETCD_SERVER_KEY) and certificate ($K8S_ETCD_SERVER_CRT) do not match!"
+		exit 1
+	fi
+
+	# Verify the certificate is signed by the CA
+	if ! openssl verify -CAfile "$KUBE_ETC_ETCD/$K8S_CA_CRT" "$KUBE_ETC_ETCD/$K8S_ETCD_SERVER_CRT" > /dev/null 2>&1; then
+		echo "Error: Certificate $K8S_ETCD_SERVER_CRT is not signed by the CA!"
+		exit 1
+	fi
+	echo "Success: $K8S_ETCD_SERVER_KEY and $K8S_ETCD_SERVER_CRT are valid."
+ }
+
+
 etcd_systemd_srv(){
-export ETCD_NAME=$(hostname -s)
- 
+
 # https://etcd.io/docs/${ETCD_VER}/op-guide/configuration/
 
 cat <<EOF | sudo tee /etc/systemd/system/etcd.service
@@ -271,23 +295,23 @@ Documentation=https://github.com/coreos
 
 [Service]
 ExecStart=/usr/local/bin/etcd \\
-  --name ${ETCD_NAME} \\
-  --cert-file=/etc/etcd/$K8S_ETCD_SERVER_CRT \\
-  --key-file=/etc/etcd/$K8S_ETCD_SERVER_KEY \\
-  --peer-cert-file=/etc/etcd/$K8S_ETCD_SERVER_CRT \\
-  --peer-key-file=/etc/etcd/$K8S_ETCD_SERVER_KEY \\
-  --trusted-ca-file=/etc/etcd/$K8S_CA_CRT \\
-  --peer-trusted-ca-file=/etc/etcd/$K8S_CA_CRT \\
+  --name ${LOCAL_HST_NAME} \\
+  --cert-file=$KUBE_ETC_ETCD/$K8S_ETCD_SERVER_CRT \\
+  --key-file=$KUBE_ETC_ETCD/$K8S_ETCD_SERVER_KEY \\
+  --peer-cert-file=$KUBE_ETC_ETCD/$K8S_ETCD_SERVER_CRT \\
+  --peer-key-file=$KUBE_ETC_ETCD/$K8S_ETCD_SERVER_KEY \\
+  --trusted-ca-file=$KUBE_ETC_ETCD/$K8S_CA_CRT \\
+  --peer-trusted-ca-file=$KUBE_ETC_ETCD/$K8S_CA_CRT \\
   --peer-client-cert-auth \\
   --client-cert-auth \\
-  --initial-advertise-peer-urls https://${INTERNAL_IP}:2380 \\
-  --listen-peer-urls https://${INTERNAL_IP}:2380 \\
-  --listen-client-urls https://${INTERNAL_IP}:2379,https://127.0.0.1:2379 \\
-  --advertise-client-urls https://${INTERNAL_IP}:2379 \\
+  --initial-advertise-peer-urls https://${LOCAL_INTERNAL_IP}:2380 \\
+  --listen-peer-urls https://${LOCAL_INTERNAL_IP}:2380 \\
+  --listen-client-urls https://${LOCAL_INTERNAL_IP}:2379,https://127.0.0.1:2379 \\
+  --advertise-client-urls https://${LOCAL_INTERNAL_IP}:2379 \\
   --initial-cluster-token etcd-cluster-0 \\
   --initial-cluster master01=https://${VBOX_INTERNAL}.11:2380,master02=https://${VBOX_INTERNAL}.12:2380 \\
   --initial-cluster-state new \\
-  --data-dir=/var/lib/etcd
+  --data-dir=$KUBE_VAR_ETCD
 Restart=on-failure
 RestartSec=5
 
@@ -296,33 +320,97 @@ WantedBy=multi-user.target
 EOF
 }
 
-etcd_cfg_req_files(){
-	sudo mkdir -p /etc/etcd /var/lib/etcd
-	sudo cp $KUBE_TOOLS_CERTS/$K8S_CA_CRT $KUBE_TOOLS_CERTS/$K8S_ETCD_SERVER_KEY $KUBE_TOOLS_CERTS/$K8S_ETCD_SERVER_CRT /etc/etcd
-	
-	if [ ! -f "/etc/etcd/$K8S_CA_CRT" ]; then
-		   echo "Error: Missing CA certificate ($K8S_CA_CRT)"
-	fi
-	
-	# Validate key and certificate
-	echo "Validating $K8S_ETCD_SERVER_KEY and $K8S_ETCD_SERVER_CRT ..."
-	if [ "$(openssl rsa -noout -modulus -in "/etc/etcd/$K8S_ETCD_SERVER_KEY" | openssl md5)" != "$(openssl x509 -noout -modulus -in "/etc/etcd/$K8S_ETCD_SERVER_CRT" | openssl md5)" ]; then
-		echo "Error: Private key ($K8S_ETCD_SERVER_KEY) and certificate ($K8S_ETCD_SERVER_CRT) do not match!"
-		exit 1
-	fi
-
-	# Verify the certificate is signed by the CA
-	if ! openssl verify -CAfile "$KUBE_TOOLS_CERTS/$K8S_CA_CRT" "$KUBE_TOOLS_CERTS/$K8S_ETCD_SERVER_CRT" > /dev/null 2>&1; then
-		echo "Error: Certificate $K8S_ETCD_SERVER_CRT is not signed by the CA!"
-		exit 1
-	fi
-	echo "Success: $K8S_ETCD_SERVER_KEY and $K8S_ETCD_SERVER_CRT are valid."
-	etcd_systemd_srv
- }
-
 ###############################
 #### ETCD-SERVICES-END ########
 ###############################
+
+######################################
+###### KUBE-CONTROL-MANAGER ##########
+######################################
+
+kube-control-manager-services_srv(){
+
+cat <<EOF | sudo tee /etc/systemd/system/kube-controller-manager.service
+[Unit]
+Description=Kubernetes Controller Manager
+Documentation=https://github.com/kubernetes/kubernetes
+[Service]
+ExecStart=/usr/local/bin/kube-controller-manager \\
+  --address=0.0.0.0 \\
+  --cluster-cidr=${VBOX_INTERNAL}.0/24 \\
+  --cluster-name=kubernetes \\
+  --cluster-signing-cert-file=/var/lib/kubernetes/$K8S_CA_CRT \\
+  --cluster-signing-key-file=/var/lib/kubernetes/$K8S_CA_KEY \\
+  --kubeconfig=/var/lib/kubernetes/kube-controller-manager.kubeconfig \\
+  --leader-elect=true \\
+  --root-ca-file=/var/lib/kubernetes/$K8S_CA_CRT \\
+  --service-account-private-key-file=/var/lib/kubernetes/$K8S_SERVICE_ACCOUNT_KEY \\
+  --service-cluster-ip-range=10.96.0.0/24 \\
+  --use-service-account-credentials=true \\
+  --v=2
+Restart=on-failure
+RestartSec=5
+[Install]
+WantedBy=multi-user.target
+EOF
+
+
+##########################################
+###### KUBE-CONTROL-MANAGER-END ##########
+##########################################
+
+###################################
+###### KUBE-API-SERVICES ##########
+###################################
+
+kube-api-services_srv(){
+
+cat <<EOF | sudo tee /etc/systemd/system/kube-apiserver.service
+[Unit]
+Description=Kubernetes API Server
+Documentation=https://github.com/kubernetes/kubernetes
+[Service]
+ExecStart=/usr/local/bin/kube-apiserver \\
+  --advertise-address=${LOCAL_INTERNAL_IP} \\
+  --allow-privileged=true \\
+  --apiserver-count=2 \\
+  --audit-log-maxage=30 \\
+  --audit-log-maxbackup=3 \\
+  --audit-log-maxsize=100 \\
+  --audit-log-path=/var/log/audit.log \\
+  --authorization-mode=Node,RBAC \\
+  --bind-address=0.0.0.0 \\
+  --client-ca-file=/var/lib/kubernetes/$K8S_CA_CRT \\
+  --enable-admission-plugins=NodeRestriction,ServiceAccount \\
+  --enable-swagger-ui=true \\
+  --enable-bootstrap-token-auth=true \\
+  --etcd-cafile=/var/lib/kubernetes/$K8S_CA_CRT \\
+  --etcd-certfile=/var/lib/kubernetes/$K8S_ETCD_SERVER_CRT \\
+  --etcd-keyfile=/var/lib/kubernetes/$K8S_ETCD_SERVER_KEY \\
+  --etcd-servers=https://${VBOX_INTERNAL}.11:2379,https://${VBOX_INTERNAL}.12:2379 \\
+  --event-ttl=1h \\
+  --encryption-provider-config=/var/lib/kubernetes/encryption-config.yaml \\
+  --kubelet-certificate-authority=/var/lib/kubernetes/$K8S_CA_CRT \\
+  --kubelet-client-certificate=/var/lib/kubernetes/$K8S_SERVICE_ACCOUNT_CRT \\
+  --kubelet-client-key=/var/lib/kubernetes/$K8S_API_KEY \\
+  --runtime-config=api/all=true \\
+  --service-account-key-file=/var/lib/kubernetes/$K8S_SERVICE_ACCOUNT_CRT \\
+  --service-cluster-ip-range=10.96.0.0/24 \\
+  --service-node-port-range=30000-32767 \\
+  --tls-cert-file=/var/lib/kubernetes/$K8S_API_CRT \\
+  --tls-private-key-file=/var/lib/kubernetes/$K8S_API_KEY \\
+  --service-account-signing-key-file=/var/lib/kubernetes/$K8S_SERVICE_ACCOUNT_KEY \\
+  --service-account-issuer=api \\
+  --v=2
+Restart=on-failure
+RestartSec=5
+[Install]
+WantedBy=multi-user.target
+EOF
+
+###################################
+#### KUBE-API-SERVICES-END ########
+###################################
 
 FinalJOBS(){
 	InstallREQPKG
@@ -345,8 +433,7 @@ Check_role_n_assign(){
 	fi
   }
 
-Install_etcd_cli
-create_openssl_cnf_kube
-create_openssl_cnf_etcd
+FinalJOBS
 creating_openssl_certs_kube8s
 etcd_cfg_req_files
+etcd_systemd_srv
