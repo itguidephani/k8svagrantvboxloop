@@ -1,8 +1,9 @@
 NUM_WORKER_NODES = 2
-K8S_IP_NW = "192.168.10."
+K8S_IP_NW = "192.168.56."
 M_IP_START = 10
 W_IP_START = 20
 k8master_hostname="k8scpmaster01"
+SHELL_FILE_PATH = "../shellscript/kubernets_manage.sh"
 
 Vagrant.configure("2") do |config|
   # Master Node Configuration
@@ -54,7 +55,7 @@ Vagrant.configure("2") do |config|
   end
 
   # Shared Provisioning for All Nodes
-  config.vm.provision "file", source: "../shellscript/kubernets_manage.sh", destination: "/tmp/kubernets_manage.sh"
+  config.vm.provision "file", source: SHELL_FILE_PATH, destination: "/tmp/kubernets_event.sh"
   config.vm.provision "shell", inline: <<-SHELL
 #    # Add entries for master and workers in /etc/hosts
     echo "#{K8S_IP_NW}#{M_IP_START} #{k8master_hostname}" | sudo tee -a /etc/hosts > /dev/null
@@ -71,8 +72,8 @@ Vagrant.configure("2") do |config|
 	sudo sed -i '/ubuntu/d' /etc/hosts  &>/dev/null
 	sudo apt-get update
     sudo apt-get install -y dos2unix net-tools
-    sudo dos2unix /tmp/kubernets_manage.sh
-	bash -x /tmp/kubernets_manage.sh
+    sudo dos2unix /tmp/kubernets_event.sh
+	bash -x /tmp/kubernets_event.sh
   SHELL
   config.trigger.after :status, type: :command do |t|
   t.info = "Showing status of all VMs!"
