@@ -34,6 +34,9 @@ export GITHUB_URL='https://github.com/etcd-io/etcd/releases/download'
 export DOWNLOAD_URL="${GOOGLE_URL}"
 export ETCDDDIR='/opt/kubernets-tools/etcd'
 
+export METALB_VERS='v0.11.0'
+export WAVE_DEAMONSET='v2.8.1'
+
 ### END K8S Cluster ####
 
 SwapOF(){
@@ -129,6 +132,16 @@ $SYSTMD daemon-reload
 $SYSTMD restart $ENABLE_DAEMON; $SYSTMD enable $ENABLE_DAEMON
 sudo apt-mark hold $KUBE_PKG
 
+Install_wave_nw(){
+	wget https://github.com/weaveworks/weave/releases/download/${WAVE_DEAMONSET}/weave-daemonset-k8s.yaml  -o $HOME/weave-daemonset-k8s.yaml
+ }
+
+Install_metalb_srv(){
+	wget https://raw.githubusercontent.com/metallb/metallb/${METALB_VERS}/manifests/namespace.yaml -o $HOME/metallb-namespace.yaml
+	wget https://raw.githubusercontent.com/metallb/metallb/${METALB_VERS}/manifests/metallb.yaml -o $HOME/metallb.yaml
+ }
+
+
 Install_helm_cli(){
 	echo "Installing helm packager"
 	# sudo curl $HELM_INSTALLURL | bash
@@ -139,6 +152,7 @@ Check_role_n_assign(){
 	if [ "$ROLE" == "master" ]; then
 		Install_etcd_cli
 		Install_helm_cli
+		Install_metalb_srv
 	elif [ "$ROLE" == "worker" ]; then
 		echo "worker node"
 	else
@@ -146,3 +160,7 @@ Check_role_n_assign(){
     exit 1
 	fi
   }
+
+Install_wave_nw
+Install_helm_cli
+Install_metalb_srv
