@@ -2,13 +2,16 @@
 
 ## https://www.downloadkubernetes.com/ ###
 
-export VBOX_INTERNAL=192.168.10
+export VBOX_INTERNAL=192.168.56
 export LOADBALANCER_ADDRESS=${VBOX_INTERNAL}.30
 export LOCAL_LOCAL_INTERNAL_IP=$(ip addr show | grep "inet " | grep ${VBOX_INTERNAL} | awk '{print $2}' | cut -d / -f 1)
 export LOCAL_HST_NAME=$(hostname -s)
 
-export KUBE_TOOLS_DUMP="/opt/kubernets-tools" KUBE_TOOLS_CERTS="$KUBE_TOOLS_DUMP/certs" KUBE_TOOLS_CONFD="$KUBE_TOOLS_DUMP/conf" KUBE_TOOLS_SYSDS="$KUBE_TOOLS_DUMP/systd"
-export KUBE_ETC_CFG="/etc/kubernetes" KUBE_VAR_LIB='/var/lib/kubernetes/' KUBE_ETC_CFG_PKI="$KUBE_ETC_CFG/pki" KUBE_ETC_ETCD="/etc/etcd" KUBE_VAR_ETCD="/var/lib/etcd" KUBE_ETC_ETCD_PKI="/etc/etcd/pki"
+export KUBE_TOOLS_DUMP="/opt/kubernets-tools" 
+export KUBE_TOOLS_CERTS="$KUBE_TOOLS_DUMP/certs" KUBE_TOOLS_CONFD="$KUBE_TOOLS_DUMP/conf" KUBE_TOOLS_SYSDS="$KUBE_TOOLS_DUMP/systd"
+export KUBE_ETC_CFG="/etc/kubernetes" KUBE_VAR_LIB='/var/lib/kubernetes/' 
+export KUBE_ETC_CFG_PKI="$KUBE_ETC_CFG/pki" 
+export KUBE_ETC_ETCD="/etc/etcd" KUBE_VAR_ETCD="/var/lib/etcd" KUBE_ETC_ETCD_PKI="/etc/etcd/pki"
 
 export k8sVERSION=v1.31.3
 export k8sURL=https://dl.k8s.io/${k8sVERSION}/bin/linux/amd64
@@ -163,7 +166,7 @@ Install_helm_cli(){
  }
 
 create_openssl_cnf_kube(){
-cat > $KUBE_TOOLS_CERTS/openssl.cnf <<EOF
+cat > $KUBE_TOOLS_CERTS/openssl.cnf <<EOFAA
 [req]
 req_extensions = v3_req
 distinguished_name = req_distinguished_name
@@ -182,11 +185,11 @@ IP.2 = ${VBOX_INTERNAL}.11
 IP.3 = ${VBOX_INTERNAL}.12
 IP.4 = ${VBOX_INTERNAL}.30
 IP.5 = 127.0.0.1
-EOF
+EOFAA
  }
 
 create_openssl_cnf_etcd(){
-cat > $KUBE_TOOLS_CERTS/openssl-etcd.cnf <<EOF
+cat > $KUBE_TOOLS_CERTS/openssl-etcd.cnf <<EOFBB
 [req]
 req_extensions = v3_req
 distinguished_name = req_distinguished_name
@@ -199,7 +202,7 @@ subjectAltName = @alt_names
 IP.1 = ${VBOX_INTERNAL}.11
 IP.2 = ${VBOX_INTERNAL}.12
 IP.3 = 127.0.0.1
-EOF
+EOFBB
  }
 
 creating_openssl_certs_kube8s(){
@@ -264,19 +267,19 @@ etcd_cfg_req_files(){
 	sudo mkdir -p $KUBE_ETC_ETCD $KUBE_VAR_ETCD $KUBE_ETC_ETCD_PKI
 	sudo cp $KUBE_TOOLS_CERTS/$K8S_CA_CRT $KUBE_TOOLS_CERTS/$K8S_ETCD_SERVER_KEY $KUBE_TOOLS_CERTS/$K8S_ETCD_SERVER_CRT $KUBE_ETC_ETCD_PKI
 
-	if [ ! -f "$KUBE_ETC_ETCD/$K8S_CA_CRT" ]; then
+	if [ ! -f "$KUBE_ETC_ETCD_PKI/$K8S_CA_CRT" ]; then
 		   echo "Error: Missing CA certificate ($K8S_CA_CRT)"
 	fi
 
 	# Validate key and certificate
 	echo "Validating $K8S_ETCD_SERVER_KEY and $K8S_ETCD_SERVER_CRT ..."
-	if [ "$(openssl rsa -noout -modulus -in "$KUBE_ETC_ETCD/$K8S_ETCD_SERVER_KEY" | openssl md5)" != "$(openssl x509 -noout -modulus -in "$KUBE_ETC_ETCD/$K8S_ETCD_SERVER_CRT" | openssl md5)" ]; then
+	if [ "$(openssl rsa -noout -modulus -in "$KUBE_ETC_ETCD_PKI/$K8S_ETCD_SERVER_KEY" | openssl md5)" != "$(openssl x509 -noout -modulus -in "$KUBE_ETC_ETCD_PKI/$K8S_ETCD_SERVER_CRT" | openssl md5)" ]; then
 		echo "Error: Private key ($K8S_ETCD_SERVER_KEY) and certificate ($K8S_ETCD_SERVER_CRT) do not match!"
 		exit 1
 	fi
 
 	# Verify the certificate is signed by the CA
-	if ! openssl verify -CAfile "$KUBE_ETC_ETCD/$K8S_CA_CRT" "$KUBE_ETC_ETCD/$K8S_ETCD_SERVER_CRT" > /dev/null 2>&1; then
+	if ! openssl verify -CAfile "$KUBE_ETC_ETCD_PKI/$K8S_CA_CRT" "$KUBE_ETC_ETCD_PKI/$K8S_ETCD_SERVER_CRT" > /dev/null 2>&1; then
 		echo "Error: Certificate $K8S_ETCD_SERVER_CRT is not signed by the CA!"
 		exit 1
 	fi
@@ -288,7 +291,7 @@ etcd_systemd_srv(){
 
 # https://etcd.io/docs/${ETCD_VER}/op-guide/configuration/
 
-cat <<EOF | sudo tee /etc/systemd/system/etcd.service
+cat <<EOFCC | sudo tee /etc/systemd/system/etcd.service
 [Unit]
 Description=etcd
 Documentation=https://github.com/coreos
@@ -296,12 +299,12 @@ Documentation=https://github.com/coreos
 [Service]
 ExecStart=/usr/local/bin/etcd \\
   --name ${LOCAL_HST_NAME} \\
-  --cert-file=$KUBE_ETC_ETCD/$K8S_ETCD_SERVER_CRT \\
-  --key-file=$KUBE_ETC_ETCD/$K8S_ETCD_SERVER_KEY \\
-  --peer-cert-file=$KUBE_ETC_ETCD/$K8S_ETCD_SERVER_CRT \\
-  --peer-key-file=$KUBE_ETC_ETCD/$K8S_ETCD_SERVER_KEY \\
-  --trusted-ca-file=$KUBE_ETC_ETCD/$K8S_CA_CRT \\
-  --peer-trusted-ca-file=$KUBE_ETC_ETCD/$K8S_CA_CRT \\
+  --cert-file=$KUBE_ETC_ETCD_PKI/$K8S_ETCD_SERVER_CRT \\
+  --key-file=$KUBE_ETC_ETCD_PKI/$K8S_ETCD_SERVER_KEY \\
+  --peer-cert-file=$KUBE_ETC_ETCD_PKI/$K8S_ETCD_SERVER_CRT \\
+  --peer-key-file=$KUBE_ETC_ETCD_PKI/$K8S_ETCD_SERVER_KEY \\
+  --trusted-ca-file=$KUBE_ETC_ETCD_PKI/$K8S_CA_CRT \\
+  --peer-trusted-ca-file=$KUBE_ETC_ETCD_PKI/$K8S_CA_CRT \\
   --peer-client-cert-auth \\
   --client-cert-auth \\
   --initial-advertise-peer-urls https://${LOCAL_INTERNAL_IP}:2380 \\
@@ -317,8 +320,8 @@ RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
-EOF
-}
+EOFCC
+ }
 
 ###############################
 #### ETCD-SERVICES-END ########
@@ -329,8 +332,7 @@ EOF
 ######################################
 
 kube-control-manager-services_srv(){
-
-cat <<EOF | sudo tee /etc/systemd/system/kube-controller-manager.service
+cat <<EOFDD | sudo tee /etc/systemd/system/kube-controller-manager.service
 [Unit]
 Description=Kubernetes Controller Manager
 Documentation=https://github.com/kubernetes/kubernetes
@@ -352,8 +354,8 @@ Restart=on-failure
 RestartSec=5
 [Install]
 WantedBy=multi-user.target
-EOF
-
+EOFDD
+ }
 
 ##########################################
 ###### KUBE-CONTROL-MANAGER-END ##########
@@ -364,8 +366,7 @@ EOF
 ###################################
 
 kube-api-services_srv(){
-
-cat <<EOF | sudo tee /etc/systemd/system/kube-apiserver.service
+cat <<EOFEE | sudo tee /etc/systemd/system/kube-apiserver.service
 [Unit]
 Description=Kubernetes API Server
 Documentation=https://github.com/kubernetes/kubernetes
@@ -406,7 +407,8 @@ Restart=on-failure
 RestartSec=5
 [Install]
 WantedBy=multi-user.target
-EOF
+EOFEE
+ }
 
 ###################################
 #### KUBE-API-SERVICES-END ########
@@ -429,7 +431,6 @@ Check_role_n_assign(){
 		echo "worker node"
 	else
 		echo "Invalid argument. Please specify 'master' or 'worker'."
-    exit 1
 	fi
   }
 
