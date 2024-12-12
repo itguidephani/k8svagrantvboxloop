@@ -19,7 +19,7 @@ Vagrant.configure("2") do |config|
 
     # Provision master node
     k8scpm01.vm.provision "shell", inline: <<-SHELL
-	  bash -x /tmp/kubernets_event.sh master
+	  bash -x /tmp/kubernets_event.sh master | tee -a /tmp/kubernets_event_sh_master.log
       NODE_IP=$(ip -o -4 addr show | grep "#{K8S_IP_NW}" | awk '{print $4}' | awk -F/ '{print $1}')
       sudo sed -i -E "s|^KUBELET_EXTRA_ARGS=.*|KUBELET_EXTRA_ARGS=--node-ip=${NODE_IP}|" /etc/default/kubelet
 	  echo "Run the command below to create the kubernets cluster."

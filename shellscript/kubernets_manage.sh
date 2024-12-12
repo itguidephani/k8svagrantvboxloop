@@ -43,7 +43,7 @@ export GITHUB_URL='https://github.com/etcd-io/etcd/releases/download'
 export DOWNLOAD_URL="${GOOGLE_URL}"
 export ETCDDDIR="${KUBE_TOOLS}/etcd"
 
-export METALB_VERS='v0.11.0'
+export METALB_VERS='v0.12.1'
 export WAVE_DEAMONSET='v2.8.1'
 export LOADLBMETA_IPSRC='192.168.56.40-192.168.56.80'
 
@@ -155,7 +155,7 @@ Install_wave_nw(){
  }
 
 Install_metalb_srv(){
-cat <<EOFFF > $KUBE_TOOLS_YAML_METALLB/metal-lb-cm.yml
+cat <<EOFFF > $KUBE_TOOLS_YAML_METALLB/metallb-configmap.yaml
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -345,17 +345,29 @@ Install_helm_cli(){
 
 helm_repo_cmd_run(){
 	K8S_HEML_COMMANDS=(
-		helm repo add rancher-stable https://releases.rancher.com/server-charts/stable
-		helm repo add jetstack https://charts.jetstack.io
+		"helm repo add rancher-stable https://releases.rancher.com/server-charts/stable"
+		"helm repo add jetstack https://charts.jetstack.io"
 		# Add kubernetes-dashboard repository
-		helm repo add kubernetes-dashboard https://kubernetes.github.io/dashboard/
-		# Deploy a Helm Release named "kubernetes-dashboard" using the kubernetes-dashboard chart
-		helm upgrade --install kubernetes-dashboard kubernetes-dashboard/kubernetes-dashboard --create-namespace --namespace kubernetes-dashboard
-		helm repo update
-		kubectl -n kubernetes-dashboard port-forward svc/kubernetes-dashboard-kong-proxy 8443:443
-		comment_lines_readme
-		kubectl apply -f $KUBE_TOOLS_YAML/components.yaml
-		kubectl apply -f $KUBE_TOOLS_YAML_NW/calico.yaml
+		"helm repo add kubernetes-dashboard https://kubernetes.github.io/dashboard/"
+		"helm repo add rancher-stable https://releases.rancher.com/server-charts/stable"
+		# Deploy a Helm Release named "kubernetes-dashboard" using the kubernetes-dashboard chart"
+		"helm upgrade --install kubernetes-dashboard kubernetes-dashboard/kubernetes-dashboard --create-namespace --namespace kubernetes-dashboard"
+		"helm repo update"
+		"kubectl -n kubernetes-dashboard port-forward svc/kubernetes-dashboard-kong-proxy 8443:443"
+		"export KUBECONFIG=/etc/kubernetes/admin.conf;kubectl create namespace cattle-system"
+		"echo $KUBE_TOOLS_YAML $KUBE_TOOLS_YAML_NW $KUBE_TOOLS_YAML_METALLB"
+		"if [[ -z \"$KUBE_TOOLS_YAML\" || -z \"$KUBE_TOOLS_YAML_NW\" || -z \"$KUBE_TOOLS_YAML_METALLB\" ]]; then
+			echo \"Error: Required environment variables not set.\"
+			exit 1
+		fi"
+		"export KUBECONFIG=/etc/kubernetes/admin.conf;kubectl apply -f ${KUBE_TOOLS_YAML}/components.yaml"
+		"export KUBECONFIG=/etc/kubernetes/admin.conf;kubectl apply -f ${KUBE_TOOLS_YAML_NW}/calico.yaml"
+		"export KUBECONFIG=/etc/kubernetes/admin.conf;kubectl apply -f ${KUBE_TOOLS_YAML_METALLB}/metallb-namespace.yaml"
+		"export KUBECONFIG=/etc/kubernetes/admin.conf;kubectl apply -f ${KUBE_TOOLS_YAML_METALLB}/metallb.yaml"
+		"export KUBECONFIG=/etc/kubernetes/admin.conf;kubectl apply -f ${KUBE_TOOLS_YAML_METALLB}/metallb-configmap.yaml"
+		"export KUBECONFIG=/etc/kubernetes/admin.conf;kubectl taint nodes --all node-role.kubernetes.io/control-plane:NoSchedule-"
+		"export KUBECONFIG=/etc/kubernetes/admin.conf;kubectl taint nodes --all node.kubernetes.io/not-ready:NoSchedule-"
+		"export KUBECONFIG=/etc/kubernetes/admin.conf;kubectl taint nodes --all node-role.kubernetes.io/master-"
 	)
 	for CMDR01 in "${K8S_HEML_COMMANDS[@]}"; do
 		echo "Executing: $CMDR01"
