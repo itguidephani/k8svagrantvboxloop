@@ -253,22 +253,6 @@ subjects:
   namespace: kubernetes-dashboard
 EOFHH
 
-cat <<EOFII > $KUBE_TOOLS_YAML_DASHBOARD/kubectlproxy.service
-[Unit]
-Description=kubectl proxy ${KUBEDASHBOARDVER_PORT}
-After=network.target kubelet.service
-
-[Service]
-User=root
-ExecStart=/bin/bash -c "export KUBECONFIG=/etc/kubernetes/admin.conf; /usr/bin/kubectl proxy --address=${VBOX_INTERNAL}.10 --port=${KUBEDASHBOARDVER_PORT} --accept-hosts "^*$""
-StartLimitInterval=0
-RestartSec=10
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-EOFII
-
 cat <<EOFJJ > $KUBE_TOOLS_YAML_DASHBOARD/README.md
 
 https://upcloud.com/resources/tutorials/deploy-kubernetes-dashboard
@@ -347,19 +331,13 @@ helm_repo_cmd_run(){
 	K8S_HEML_COMMANDS=(
 		"helm repo add rancher-stable https://releases.rancher.com/server-charts/stable"
 		"helm repo add jetstack https://charts.jetstack.io"
-		# Add kubernetes-dashboard repository
 		"helm repo add kubernetes-dashboard https://kubernetes.github.io/dashboard/"
 		"helm repo add rancher-stable https://releases.rancher.com/server-charts/stable"
-		# Deploy a Helm Release named "kubernetes-dashboard" using the kubernetes-dashboard chart"
 		"helm upgrade --install kubernetes-dashboard kubernetes-dashboard/kubernetes-dashboard --create-namespace --namespace kubernetes-dashboard"
 		"helm repo update"
 		"kubectl -n kubernetes-dashboard port-forward svc/kubernetes-dashboard-kong-proxy 8443:443"
 		"export KUBECONFIG=/etc/kubernetes/admin.conf;kubectl create namespace cattle-system"
 		"echo $KUBE_TOOLS_YAML $KUBE_TOOLS_YAML_NW $KUBE_TOOLS_YAML_METALLB"
-		"if [[ -z \"$KUBE_TOOLS_YAML\" || -z \"$KUBE_TOOLS_YAML_NW\" || -z \"$KUBE_TOOLS_YAML_METALLB\" ]]; then
-			echo \"Error: Required environment variables not set.\"
-			exit 1
-		fi"
 		"export KUBECONFIG=/etc/kubernetes/admin.conf;kubectl apply -f ${KUBE_TOOLS_YAML}/components.yaml"
 		"export KUBECONFIG=/etc/kubernetes/admin.conf;kubectl apply -f ${KUBE_TOOLS_YAML_NW}/calico.yaml"
 		"export KUBECONFIG=/etc/kubernetes/admin.conf;kubectl apply -f ${KUBE_TOOLS_YAML_METALLB}/metallb-namespace.yaml"
@@ -370,9 +348,30 @@ helm_repo_cmd_run(){
 		"export KUBECONFIG=/etc/kubernetes/admin.conf;kubectl taint nodes --all node-role.kubernetes.io/master-"
 	)
 	for CMDR01 in "${K8S_HEML_COMMANDS[@]}"; do
-		echo "Executing: $CMDR01"
-		su - "$USERMR" -c "$CMDR01"
+			echo "Executing: $CMDR01"
+			bash -c "$CMDR01"
+			if [[ $? -ne 0 ]]; then
+				echo "Command failed: $CMDR01"
+			fi
 	done
+ }
+
+kube_proxy_systd(){
+cat <<EOFII > $KUBE_TOOLS_YAML_DASHBOARD/kubectlproxy.service
+[Unit]
+Description=kubectl proxy ${KUBEDASHBOARDVER_PORT}
+After=network.target kubelet.service
+
+[Service]
+User=root
+ExecStart=/bin/bash -c "export KUBECONFIG=/etc/kubernetes/admin.conf; /usr/bin/kubectl proxy --address=${VBOX_INTERNAL}.10 --port=${KUBEDASHBOARDVER_PORT} --accept-hosts "^*$""
+StartLimitInterval=0
+RestartSec=10
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOFII
  }
 
 DCreate_Cluster(){
@@ -399,6 +398,7 @@ Check_role_n_assign(){
 			run_kube_proxy_dashboads
 			DCreate_Cluster
 			helm_repo_cmd_run
+			kube_proxy_systd
 	elif [ "$ROLE" == "worker" ]; then
 		echo "worker node"
 		InstallREQPKG
