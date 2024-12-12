@@ -170,8 +170,9 @@ data:
       - $LOADLBMETA_IPSRC
 EOFFF
 
-	wget https://raw.githubusercontent.com/metallb/metallb/${METALB_VERS}/manifests/namespace.yaml -O $KUBE_TOOLS_YAML_METALLB/metallb-namespace.yaml
-	wget https://raw.githubusercontent.com/metallb/metallb/${METALB_VERS}/manifests/metallb.yaml -O $KUBE_TOOLS_YAML_METALLB/metallb.yaml
+#	wget https://raw.githubusercontent.com/metallb/metallb/${METALB_VERS}/manifests/namespace.yaml -O $KUBE_TOOLS_YAML_METALLB/metallb-namespace.yaml
+#	wget https://raw.githubusercontent.com/metallb/metallb/${METALB_VERS}/manifests/metallb.yaml -O $KUBE_TOOLS_YAML_METALLB/metallb.yaml
+	wget https://raw.githubusercontent.com/metallb/metallb/v0.14.8/config/manifests/metallb-native.yaml -O $KUBE_TOOLS_YAML_METALLB/metallb-native.yaml
  }
 
 run_kube_proxy_dashboads(){
@@ -207,7 +208,7 @@ kind: ServiceAccount
 metadata:
   name: read-only-user
   namespace: kubernetes-dashboard
----
+----
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -324,6 +325,7 @@ Install_helm_cli(){
  }
 
 helm_repo_cmd_run(){
+	Install_helm_cli
 	K8S_HEML_COMMANDS=(
 		"helm repo add rancher-stable https://releases.rancher.com/server-charts/stable"
 		"helm repo add jetstack https://charts.jetstack.io"
@@ -331,17 +333,6 @@ helm_repo_cmd_run(){
 		"helm repo add rancher-stable https://releases.rancher.com/server-charts/stable"
 		"helm upgrade --install kubernetes-dashboard kubernetes-dashboard/kubernetes-dashboard --create-namespace --namespace kubernetes-dashboard"
 		"helm repo update"
-		"kubectl -n kubernetes-dashboard port-forward svc/kubernetes-dashboard-kong-proxy 8443:443"
-		"export KUBECONFIG=/etc/kubernetes/admin.conf;kubectl create namespace cattle-system"
-		"echo $KUBE_TOOLS_YAML $KUBE_TOOLS_YAML_NW $KUBE_TOOLS_YAML_METALLB"
-		"export KUBECONFIG=/etc/kubernetes/admin.conf;kubectl apply -f ${KUBE_TOOLS_YAML}/components.yaml"
-		"export KUBECONFIG=/etc/kubernetes/admin.conf;kubectl apply -f ${KUBE_TOOLS_YAML_NW}/calico.yaml"
-		"export KUBECONFIG=/etc/kubernetes/admin.conf;kubectl apply -f ${KUBE_TOOLS_YAML_METALLB}/metallb-namespace.yaml"
-		"export KUBECONFIG=/etc/kubernetes/admin.conf;kubectl apply -f ${KUBE_TOOLS_YAML_METALLB}/metallb.yaml"
-		"export KUBECONFIG=/etc/kubernetes/admin.conf;kubectl apply -f ${KUBE_TOOLS_YAML_METALLB}/metallb-configmap.yaml"
-		"export KUBECONFIG=/etc/kubernetes/admin.conf;kubectl taint nodes --all node-role.kubernetes.io/control-plane:NoSchedule-"
-		"export KUBECONFIG=/etc/kubernetes/admin.conf;kubectl taint nodes --all node.kubernetes.io/not-ready:NoSchedule-"
-		"export KUBECONFIG=/etc/kubernetes/admin.conf;kubectl taint nodes --all node-role.kubernetes.io/master-"
 	)
 	for CMDR01 in "${K8S_HEML_COMMANDS[@]}"; do
 			echo "Executing: $CMDR01"
@@ -350,6 +341,7 @@ helm_repo_cmd_run(){
 				echo "Command failed: $CMDR01"
 			fi
 	done
+	# kubectl -n kubernetes-dashboard port-forward svc/kubernetes-dashboard-kong-proxy 8443:443
  }
 
 kube_proxy_systd(){
@@ -381,7 +373,24 @@ DCreate_Cluster(){
   mkdir -p /home/$USERMR/.kube
   cp -i /etc/kubernetes/admin.conf /home/$USERMR/.kube/config
   chown $USERMR:$USERMR /home/$USERMR/.kube/config
-  Install_helm_cli
+  KUB8COMMAND="kubectl cluster-info"
+  while true; do
+     echo "Executing: $KUB8COMMAND"
+     $KUB8COMMAND
+     if [[ $? -eq 0 ]]; then
+        echo "Command succeeded!"
+	    kubectl taint nodes --all node-role.kubernetes.io/control-plane:NoSchedule-
+	    kubectl taint nodes --all node.kubernetes.io/not-ready:NoSchedule-
+        kubectl taint nodes --all node-role.kubernetes.io/master-
+        kubectl apply -f ${KUBE_TOOLS_YAML}/components.yaml
+        kubectl apply -f ${KUBE_TOOLS_YAML_NW}/calico.yaml
+        kubectl apply -f ${KUBE_TOOLS_YAML_METALLB}/metallb-native.yaml
+        kubectl apply -f ${KUBE_TOOLS_YAML_METALLB}/metallb-configmap.yaml
+     else
+        echo "Command failed. Retrying in 5 seconds..."
+        sleep 5
+     fi
+  done
  }
 
 Check_role_n_assign(){
