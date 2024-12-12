@@ -310,10 +310,6 @@ Likewise, if you want to disable the dashboard, it can be deleted just like any 
 kubectl delete -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.0.0/aio/deploy/recommended.yaml
 EOFJJ
 
-   sudo cp $KUBE_TOOLS_YAML_DASHBOARD/kubectlproxy.service /etc/systemd/system/
-   sudo systemctl daemon-reload
-   sudo systemctl enable kubectlproxy.service
-   sudo systemctl restart kubectlproxy.service
  }
 comment_lines_readme(){
 	kubectl taint nodes --all  node-role.kubernetes.io/control-plane:NoSchedule-
@@ -372,6 +368,11 @@ Restart=always
 [Install]
 WantedBy=multi-user.target
 EOFII
+
+   sudo cp $KUBE_TOOLS_YAML_DASHBOARD/kubectlproxy.service /etc/systemd/system/
+   sudo systemctl daemon-reload
+   sudo systemctl enable kubectlproxy.service
+   sudo systemctl restart kubectlproxy.service
  }
 
 DCreate_Cluster(){
