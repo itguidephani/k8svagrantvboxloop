@@ -19,6 +19,7 @@ Vagrant.configure("2") do |config|
 
     # Provision master node
     k8scpm01.vm.provision "shell", inline: <<-SHELL
+	  bash -x /tmp/kubernets_event.sh master
       NODE_IP=$(ip -o -4 addr show | grep "#{K8S_IP_NW}" | awk '{print $4}' | awk -F/ '{print $1}')
       sudo sed -i -E "s|^KUBELET_EXTRA_ARGS=.*|KUBELET_EXTRA_ARGS=--node-ip=${NODE_IP}|" /etc/default/kubelet
 	  echo "Run the command below to create the kubernets cluster."
@@ -26,7 +27,6 @@ Vagrant.configure("2") do |config|
 	  echo -e "\nsudo kubeadm init --apiserver-advertise-address ${NODE_IP} --control-plane-endpoint ${NODE_IP} --node-name #{k8master_hostname} --ignore-preflight-errors Swap"
 	  printf "%.0s#" {1..110}
 	  echo ""
-	  sudo kubeadm config images pull
     SHELL
   end
 
@@ -50,6 +50,7 @@ Vagrant.configure("2") do |config|
       worker.vm.provision "shell", inline: <<-SHELL
         NODE_IP=$(ip -o -4 addr show | grep "#{K8S_IP_NW}" | awk '{print $4}' | awk -F/ '{print $1}')
         sudo sed -i -E "s|^KUBELET_EXTRA_ARGS=.*|KUBELET_EXTRA_ARGS=--node-ip=${NODE_IP}|" /etc/default/kubelet
+		bash -x /tmp/kubernets_event.sh worker
       SHELL
     end
   end
@@ -57,6 +58,15 @@ Vagrant.configure("2") do |config|
   # Shared Provisioning for All Nodes
   config.vm.provision "file", source: SHELL_FILE_PATH, destination: "/tmp/kubernets_event.sh"
   config.vm.provision "shell", inline: <<-SHELL
+    sudo echo "vagrant:vagrant" | sudo chpasswd
+	sudo sed -i 's/^#PasswordAuthentication/PasswordAuthentication/' /etc/ssh/sshd_config
+	sudo sed -i 's/^#PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
+	sudo sed -i 's/^#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+	sudo sed -i 's/^#PubkeyAuthentication/PubkeyAuthentication/' /etc/ssh/sshd_config
+	sudo sed -i 's/^#PermitEmptyPasswords no/PermitEmptyPasswords yes/' /etc/ssh/sshd_config
+	sudo sed -i 's/^#AllowTcpForwarding/AllowTcpForwarding/' /etc/ssh/sshd_config
+	sudo sed -i 's/^#HostbasedAuthentication/HostbasedAuthentication/' /etc/ssh/sshd_config
+	sudo systemctl reload sshd &
 #    # Add entries for master and workers in /etc/hosts
     echo "#{K8S_IP_NW}#{M_IP_START} #{k8master_hostname}" | sudo tee -a /etc/hosts > /dev/null
     for ii in $(seq 1 #{NUM_WORKER_NODES}); do
@@ -73,7 +83,6 @@ Vagrant.configure("2") do |config|
 	sudo apt-get update
     sudo apt-get install -y dos2unix net-tools
     sudo dos2unix /tmp/kubernets_event.sh
-	bash -x /tmp/kubernets_event.sh
   SHELL
   config.trigger.after :status, type: :command do |t|
   t.info = "Showing status of all VMs!"
