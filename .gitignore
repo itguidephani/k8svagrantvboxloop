@@ -1,3 +1,4 @@
 .vagrant
 terraform/.terraform/
 .terraform
+K8SCLUSTERJOINCMD_FILE.sh
