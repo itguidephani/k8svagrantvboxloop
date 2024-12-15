@@ -1,8 +1,6 @@
 #!/bin/bash
 ###  K8S Cluster ####
-set -e
-
-export VBOX_INTERNAL=192.168.56
+set +e
 
 ROLE=$1
 ## Check if an argument is provided
@@ -10,43 +8,54 @@ if [ "$#" -ne 1 ]; then
      echo "Usage: $0 <master|worker>"
      exit 1
 fi
+
+# IP Range
+export VBOX_INTERNAL=192.168.56
+export LOADLBMETA_IPSRC="192.168.56.40-192.168.56.60"
+# User
 export USERMR='vagrant'
+# Versions
+export KUBECTLVER='v1.31'
+export KUBEDASHBOARDVER='v2.0.0'
+export ETCD_VER=v3.5.17
+export METALB_VERS='main'
+export WAVE_DEAMONSET='v2.8.1'
+export CERTSMGR='v1.16.2'
+# Required Dir
 export KUBE_TOOLS="/opt/kubernets-tools"
 export KUBE_TOOLS_YAML="${KUBE_TOOLS}/yaml"
 export KUBE_TOOLS_YAML_NW="${KUBE_TOOLS_YAML}/network"
 export KUBE_TOOLS_YAML_METALLB="${KUBE_TOOLS_YAML}/metallb"
 export KUBE_TOOLS_YAML_DASHBOARD="${KUBE_TOOLS_YAML}/dashboard"
+export KUBE_TOOLS_YAML_RANCHER="${KUBE_TOOLS_YAML}/rancher"
+export KUBE_TOOLS_YAML_CRTMGR="${KUBE_TOOLS_YAML}/certs-manager"
+export ETCDDDIR="${KUBE_TOOLS}/etcd"
+## Config Files and modules
 export k8s_modules01=("overlay" "br_netfilter")
 export KRMODULESK8S='/etc/modules-load.d/k8s_modules.conf'
 export k8s_kernel_nw01=("net.ipv4.ip_forward=1" "net.bridge.bridge-nf-call-iptables=1" "net.bridge.bridge-nf-call-ip6tables=1")
 export SYSCTLK8S99='/etc/sysctl.d/99-kubernetes.conf'
-
-export KUBECTLVER='v1.31'
-export KUBEDASHBOARDVER='v2.0.0'
-export KUBEDASHBOARDVER_PORT='8001'
-export INSTALLURL_DEB="https://pkgs.k8s.io/core:/stable:/${KUBECTLVER}/deb"
-export APTKY_DEB_K8='/etc/apt/keyrings/kubernetes-apt-keyring.gpg'
-export DEBREPO="/etc/apt/sources.list.d/kubernetes.list"
-
 export SYSTMD='sudo systemctl'
 export DISABLE_DAEMON='apparmor'
 export ENABLE_DAEMON='containerd kubelet'
-
+# Package
 export APTGET='sudo apt-get'
 export REQ_PPK='apt-transport-https ca-certificates curl gpg jq'
-
-export KUBE_PKG='containerd jq kubelet kubeadm kubectl'
-
-export ETCD_VER=v3.5.17
+export KUBE_PKG='containerd kubelet kubeadm kubectl helm'
+# Port Numbers 
+export KUBEDASHBOARDVER_PORT='8001'
+export RANCHERHTP='7080'
+export RANCHERHTPS='7443'
+# URL
+export INSTALLURL_DEB="https://pkgs.k8s.io/core:/stable:/${KUBECTLVER}/deb"
+export HELM_INSTALLURL_DEB='https://baltocdn.com/helm/stable/debian/ all main'
+export APTKY_DEB_K8='/etc/apt/keyrings/kubernetes-apt-keyring.gpg'
+export APTKY_DEB_HELM='/etc/apt/keyrings/helm.gpg'
+export DEBREPO="/etc/apt/sources.list.d/kubernetes.list"
+export HELM_DEBREPO="/etc/apt/sources.list.d/helm-stable-debian.list"
 export GOOGLE_URL='https://storage.googleapis.com/etcd'
 export GITHUB_URL='https://github.com/etcd-io/etcd/releases/download'
 export DOWNLOAD_URL="${GOOGLE_URL}"
-export ETCDDDIR="${KUBE_TOOLS}/etcd"
-
-export METALB_VERS='v0.12.1'
-export WAVE_DEAMONSET='v2.8.1'
-export LOADLBMETA_IPSRC='192.168.56.40-192.168.56.80'
-
 ### END K8S Cluster ####
 
 SwapOF(){
@@ -56,13 +65,15 @@ SwapOF(){
 SwapOF
 
 create_r_q_dir(){
-	sudo mkdir -p $KUBE_TOOLS $KUBE_TOOLS_YAML $KUBE_TOOLS_YAML_METALLB $KUBE_TOOLS_YAML_NW $KUBE_TOOLS_YAML_DASHBOARD
-	sudo chmod -R 777 $KUBE_TOOLS $KUBE_TOOLS_YAML $KUBE_TOOLS_YAML_NW $KUBE_TOOLS_YAML_METALLB $KUBE_TOOLS_YAML_DASHBOARD
+	sudo mkdir -p $KUBE_TOOLS $KUBE_TOOLS_YAML $KUBE_TOOLS_YAML_METALLB $KUBE_TOOLS_YAML_NW $KUBE_TOOLS_YAML_DASHBOARD $KUBE_TOOLS_YAML_RANCHER $KUBE_TOOLS_YAML_CRTMGR
+	sudo chmod -R 777 $KUBE_TOOLS
  }
 
 InstallREQPKG(){
 	curl -fsSL $INSTALLURL_DEB/Release.key | sudo gpg --dearmor -o $APTKY_DEB_K8
+	curl https://baltocdn.com/helm/signing.asc | gpg --dearmor | sudo tee $APTKY_DEB_HELM > /dev/null
 	echo "deb [signed-by=${APTKY_DEB_K8}] ${INSTALLURL_DEB}/ /" | sudo tee $DEBREPO
+	echo "deb [arch=$(dpkg --print-architecture) signed-by=$APTKY_DEB_HELM] ${HELM_INSTALLURL_DEB}" | sudo tee $HELM_DEBREPO
 	$APTGET clean all
 	echo "Update packages list"
 	$APTGET update
@@ -154,39 +165,68 @@ Install_wave_nw(){
 	wget https://docs.projectcalico.org/manifests/calico.yaml -O $KUBE_TOOLS_YAML_NW/calico.yaml
  }
 
+
+docker_shell_script(){
+sudo groupadd docker || sudo usermod -aG docker $USERMR
+newgrp docker << EOFLL
+id
+EOFLL
+
+sudo tee -a /usr/local/bin/rancher_run_docker <<EOFPP
+sudo apt-get install docker.io -y
+sudo groupadd docker || sudo usermod -aG docker $USER
+newgrp docker << EOFLLL
+id
+sudo systemctl enable docker; sudo systemctl restart docker
+DRST=\$(docker ps  | grep rancher | grep Up | wc -l);if [ "\$DRST" -gt 0 ]; then docker ps | grep rancher; else docker run -d --restart=unless-stopped -p \${RANCHERHTP}:\${RANCHERHTP} -p \${RANCHERHTPS}:\${RANCHERHTPS} --privileged rancher/rancher && DOCKER_RANCHER_ID=\$(docker ps | grep rancher | awk '{print \$1}');fi
+exit
+EOFLLL
+DOCKER_RANCHER_ID=\$(docker ps | grep rancher | awk '{print \$1}')
+sudo docker logs \$DOCKER_RANCHER_ID 2>&1 | grep "Bootstrap Password"  | awk -F: '{print "Rancher firstboot Password :" \$4}' | sudo tee $KUBE_TOOLS_YAML_RANCHER/RANCHER_FIRSTBOOT_PASSWD
+EOFPP
+
+sudo chmod +x /usr/local/bin/rancher_run_docker
+ }
+
+docker_cfg_man_rancher(){
+	/usr/local/bin/rancher_run_docker
+ }
+ 
 Install_metalb_srv(){
 cat <<EOFFF > $KUBE_TOOLS_YAML_METALLB/metallb-configmap.yaml
-apiVersion: v1
-kind: ConfigMap
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
 metadata:
+  name: first-pool
   namespace: metallb-system
-  name: config
-data:
-  config: |
-    address-pools:
-    - name: default
-      protocol: layer2
-      addresses:
+spec:
+  addresses:
       - $LOADLBMETA_IPSRC
+---
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: example
+  namespace: metallb-system
+spec:
+  ipAddressPools:
+  - first-pool
 EOFFF
 
-#	wget https://raw.githubusercontent.com/metallb/metallb/${METALB_VERS}/manifests/namespace.yaml -O $KUBE_TOOLS_YAML_METALLB/metallb-namespace.yaml
-#	wget https://raw.githubusercontent.com/metallb/metallb/${METALB_VERS}/manifests/metallb.yaml -O $KUBE_TOOLS_YAML_METALLB/metallb.yaml
-	wget https://raw.githubusercontent.com/metallb/metallb/v0.14.8/config/manifests/metallb-native.yaml -O $KUBE_TOOLS_YAML_METALLB/metallb-native.yaml
+	wget https://raw.githubusercontent.com/metallb/metallb/${METALB_VERS}/config/manifests/metallb-native.yaml -O $KUBE_TOOLS_YAML_METALLB/metallb-native.yaml
  }
 
 run_kube_proxy_dashboads(){
 
    wget https://raw.githubusercontent.com/kubernetes/dashboard/${KUBEDASHBOARDVER}/aio/deploy/recommended.yaml -O $KUBE_TOOLS_YAML_DASHBOARD/dashboard_${KUBEDASHBOARDVER}_aio_recommended.yaml
 
-
-cat <<EOFGG > $KUBE_TOOLS_YAML_DASHBOARD/dashboard-admin.yaml
+cat <<EOFGG > $KUBE_TOOLS_YAML_DASHBOARD/dashboard-srv-admin.yaml
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: admin-user
   namespace: kubernetes-dashboard
-----
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
@@ -201,14 +241,13 @@ subjects:
   namespace: kubernetes-dashboard
 EOFGG
 
-
 cat <<EOFHH > $KUBE_TOOLS_YAML_DASHBOARD/dashboard-read-only.yaml
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: read-only-user
   namespace: kubernetes-dashboard
-----
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -313,9 +352,9 @@ EOFJJ
 
  }
 comment_lines_readme(){
-	kubectl taint nodes --all  node-role.kubernetes.io/control-plane:NoSchedule-
-	kubectl taint nodes --all node.kubernetes.io/not-ready:NoSchedule-
-    kubectl taint nodes --all node-role.kubernetes.io/master-
+	sudo su - "$USERMR" -c  "kubectl taint nodes --all node-role.kubernetes.io/control-plane:NoSchedule-"
+	sudo su - "$USERMR" -c  "kubectl taint nodes --all node.kubernetes.io/not-ready:NoSchedule-"
+    sudo su - "$USERMR" -c  "kubectl taint nodes --all node-role.kubernetes.io/master-"
 }
 
 Install_helm_cli(){
@@ -326,22 +365,14 @@ Install_helm_cli(){
 
 helm_repo_cmd_run(){
 	Install_helm_cli
-	K8S_HEML_COMMANDS=(
-		"helm repo add rancher-stable https://releases.rancher.com/server-charts/stable"
-		"helm repo add jetstack https://charts.jetstack.io"
-		"helm repo add kubernetes-dashboard https://kubernetes.github.io/dashboard/"
-		"helm repo add rancher-stable https://releases.rancher.com/server-charts/stable"
-		"helm upgrade --install kubernetes-dashboard kubernetes-dashboard/kubernetes-dashboard --create-namespace --namespace kubernetes-dashboard"
-		"helm repo update"
-	)
-	for CMDR01 in "${K8S_HEML_COMMANDS[@]}"; do
-			echo "Executing: $CMDR01"
-			bash -c "$CMDR01"
-			if [[ $? -ne 0 ]]; then
-				echo "Command failed: $CMDR01"
-			fi
-	done
-	# kubectl -n kubernetes-dashboard port-forward svc/kubernetes-dashboard-kong-proxy 8443:443
+	sudo su - "$USERMR" -c  "helm repo add rancher-stable https://releases.rancher.com/server-charts/stable"
+	sudo su - "$USERMR" -c  "helm repo add jetstack https://charts.jetstack.io"
+	sudo su - "$USERMR" -c  "helm repo add kubernetes-dashboard https://kubernetes.github.io/dashboard/"
+	sudo su - "$USERMR" -c  "helm repo update"
+ }
+
+get_cert-manager(){
+   wget https://github.com/cert-manager/cert-manager/releases/download/${CERTSMGR}/cert-manager.crds.yaml -O $KUBE_TOOLS_YAML_CRTMGR/cert-manager.crds.yaml
  }
 
 kube_proxy_systd(){
@@ -373,24 +404,19 @@ DCreate_Cluster(){
   mkdir -p /home/$USERMR/.kube
   cp -i /etc/kubernetes/admin.conf /home/$USERMR/.kube/config
   chown $USERMR:$USERMR /home/$USERMR/.kube/config
-  KUB8COMMAND="kubectl cluster-info"
-  while true; do
-     echo "Executing: $KUB8COMMAND"
-     $KUB8COMMAND
-     if [[ $? -eq 0 ]]; then
-        echo "Command succeeded!"
-	    kubectl taint nodes --all node-role.kubernetes.io/control-plane:NoSchedule-
-	    kubectl taint nodes --all node.kubernetes.io/not-ready:NoSchedule-
-        kubectl taint nodes --all node-role.kubernetes.io/master-
-        kubectl apply -f ${KUBE_TOOLS_YAML}/components.yaml
-        kubectl apply -f ${KUBE_TOOLS_YAML_NW}/calico.yaml
-        kubectl apply -f ${KUBE_TOOLS_YAML_METALLB}/metallb-native.yaml
-        kubectl apply -f ${KUBE_TOOLS_YAML_METALLB}/metallb-configmap.yaml
-     else
-        echo "Command failed. Retrying in 5 seconds..."
-        sleep 5
-     fi
-  done
+  sudo su - "$USERMR" -c  "kubectl apply -f ${KUBE_TOOLS_YAML_NW}/calico.yaml"
+  sudo su - "$USERMR" -c  "kubectl taint nodes --all node-role.kubernetes.io/control-plane:NoSchedule-"
+  sudo su - "$USERMR" -c  "kubectl taint nodes --all node.kubernetes.io/not-ready:NoSchedule-"
+  sudo su - "$USERMR" -c  "kubectl apply -f ${KUBE_TOOLS_YAML}/components.yaml"
+  sudo su - "$USERMR" -c  "kubectl apply -f ${KUBE_TOOLS_YAML_METALLB}/metallb-native.yaml"
+  sudo su - "$USERMR" -c  "helm upgrade --install kubernetes-dashboard kubernetes-dashboard/kubernetes-dashboard --create-namespace --namespace kubernetes-dashboard"
+  sudo su - "$USERMR" -c  "nohup kubectl -n kubernetes-dashboard port-forward svc/kubernetes-dashboard-kong-proxy 8443:443 &>/tmp/portfdasd.log"
+  sudo su - "$USERMR" -c  "until kubectl get apiservices v1beta1.metrics.k8s.io | grep -i false;do kubectl delete pod -n kube-system -l k8s-app=metrics-server || kubectl apply -f ${KUBE_TOOLS_YAML}/components.yaml;done"
+  sudo su - "$USERMR" -c  "kubectl create namespace cattle-system"
+  sudo su - "$USERMR" -c  "kubectl apply -f ${KUBE_TOOLS_YAML_CRTMGR}/cert-manager.crds.yaml"
+  sudo su - "$USERMR" -c  "helm install cert-manager jetstack/cert-manager --namespace cert-manager --create-namespace --set crds.enabled=true"
+  sudo su - "$USERMR" -c  "kubectl get pods --namespace cert-manager"
+  sudo su - "$USERMR" -c  "kubectl apply -f ${KUBE_TOOLS_YAML_METALLB}/metallb-configmap.yaml"
  }
 
 Check_role_n_assign(){
@@ -400,21 +426,25 @@ Check_role_n_assign(){
 			KernelContainerD_Modules
 			K8sNW_KERNL_Parameters
 			containerdCGroup_Driver
-			Install_etcd_cli
+#			Install_etcd_cli
 			serv_crl_demon
 			usefull_tools_k8s
 			Install_wave_nw
 			Install_metalb_srv
-			run_kube_proxy_dashboads
-			DCreate_Cluster
+			docker_shell_script
+#			docker_cfg_man_rancher
+			#run_kube_proxy_dashboads
 			helm_repo_cmd_run
-			kube_proxy_systd
+			DCreate_Cluster
+#			kube_proxy_systd
 	elif [ "$ROLE" == "worker" ]; then
 		echo "worker node"
 		InstallREQPKG
 		KernelContainerD_Modules
 		K8sNW_KERNL_Parameters
 		containerdCGroup_Driver
+		serv_crl_demon
+		Install_helm_cli
 	else
 		echo "Invalid argument. Please specify 'master' or 'worker'."
     exit 1

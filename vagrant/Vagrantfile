@@ -5,6 +5,7 @@ W_IP_START = 20
 k8master_hostname="k8scpmaster01"
 SHELL_FILE_PATH = "../shellscript/kubernets_manage.sh"
 
+
 Vagrant.configure("2") do |config|
   # Master Node Configuration
   config.vm.define "k8scpmt" do |k8scpm01|
@@ -23,10 +24,22 @@ Vagrant.configure("2") do |config|
       NODE_IP=$(ip -o -4 addr show | grep "#{K8S_IP_NW}" | awk '{print $4}' | awk -F/ '{print $1}')
       sudo sed -i -E "s|^KUBELET_EXTRA_ARGS=.*|KUBELET_EXTRA_ARGS=--node-ip=${NODE_IP}|" /etc/default/kubelet
 	  echo "Run the command below to create the kubernets cluster."
-	  printf "%.0s#" {1..110}
+	  printf "%.0s#" 1..110}
 	  echo -e "\nsudo kubeadm init --apiserver-advertise-address ${NODE_IP} --control-plane-endpoint ${NODE_IP} --node-name #{k8master_hostname} --ignore-preflight-errors Swap"
 	  printf "%.0s#" {1..110}
 	  echo ""
+	  echo '#!/bin/bash' > /vagrant/K8SCLUSTERJOINCMD_FILE.sh
+	  echo '####' >> /vagrant/K8SCLUSTERJOINCMD_FILE.sh
+	  echo 'sudo systemctl restart kubelet' >> /vagrant/K8SCLUSTERJOINCMD_FILE.sh
+	  echo '####' >> /vagrant/K8SCLUSTERJOINCMD_FILE.sh
+	  echo 'sudo su - "vagrant" -c  "mkdir -p /home/$USERMR/.kube"' >> /vagrant/K8SCLUSTERJOINCMD_FILE.sh
+      export KUBECONFIG=/etc/kubernetes/admin.conf && sudo kubeadm token create --print-join-command >> /vagrant/K8SCLUSTERJOINCMD_FILE.sh
+	  echo '####' >> /vagrant/K8SCLUSTERJOINCMD_FILE.sh
+	  echo 'cat <<EOFKK > /home/vagrant/.kube/config' >> /vagrant/K8SCLUSTERJOINCMD_FILE.sh
+	  sudo  cat /etc/kubernetes/admin.conf >> /vagrant/K8SCLUSTERJOINCMD_FILE.sh
+	  echo 'EOFKK' >> /vagrant/K8SCLUSTERJOINCMD_FILE.sh
+	  echo 'sudo chown vagrant:vagrant /home/vagrant/.kube/config'  >> /vagrant/K8SCLUSTERJOINCMD_FILE.sh
+	  echo '####' >> /vagrant/K8SCLUSTERJOINCMD_FILE.sh
     SHELL
   end
 
@@ -48,9 +61,10 @@ Vagrant.configure("2") do |config|
 
       # Provision worker node
       worker.vm.provision "shell", inline: <<-SHELL
+		bash -x /tmp/kubernets_event.sh worker
         NODE_IP=$(ip -o -4 addr show | grep "#{K8S_IP_NW}" | awk '{print $4}' | awk -F/ '{print $1}')
         sudo sed -i -E "s|^KUBELET_EXTRA_ARGS=.*|KUBELET_EXTRA_ARGS=--node-ip=${NODE_IP}|" /etc/default/kubelet
-		bash -x /tmp/kubernets_event.sh worker
+		bash -x /vagrant/K8SCLUSTERJOINCMD_FILE.sh
       SHELL
     end
   end
